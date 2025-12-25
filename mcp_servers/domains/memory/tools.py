@@ -70,7 +70,8 @@ async def search_past_incidents(query: str, limit: int = 3) -> PastIncidentSearc
 
         incidents = []
         for point in results.points:
-            payload = point.payload or {}
+            raw_payload = point.payload or {}
+            payload = raw_payload.get("metadata", raw_payload)
             raw_summary = payload.get("summary", "")
             summary_str = (
                 ", ".join(raw_summary) if isinstance(raw_summary, list) else raw_summary
@@ -92,6 +93,6 @@ async def search_past_incidents(query: str, limit: int = 3) -> PastIncidentSearc
 
         return PastIncidentSearchResult(incidents=incidents)
 
-    except (ConnectionError, TimeoutError, OSError) as exc:
-        logger.warning("Qdrant search failed (connectivity): %s", exc)
+    except Exception as exc:
+        logger.warning("Qdrant search failed: %s", exc)
         return PastIncidentSearchResult(incidents=[])

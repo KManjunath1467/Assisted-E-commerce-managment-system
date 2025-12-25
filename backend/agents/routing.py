@@ -14,12 +14,22 @@ def route_after_aggregator(state: GraphState) -> str:
     """Conditional edge: decide what follows the aggregator node.
 
     - Simple factual queries (requires_deep_analysis=False, action_requested=False)
-      skip the reflector entirely and go straight to the final response.
+      skip the reflector entirely and go straight to the final response —
+      unless domain agents queued actions that need HITL approval.
     - Analytical queries and action-requested queries proceed to the reflector,
       which validates the analysis and guards the HITL path.
     """
     if state.get("requires_deep_analysis", True) or state.get("action_requested", False):
         return "reflector"
+    if any(a.requires_approval for a in state.get("recommended_actions", [])):
+        return "reflector"
+    return "final_response"
+
+
+def route_after_hitl(state: GraphState) -> str:
+    """Route to execute node if an action was approved, otherwise to final response."""
+    if state.get("approved_action_id"):
+        return "execute"
     return "final_response"
 
 
@@ -28,16 +38,18 @@ def route_after_reflector(state: GraphState) -> str:
 
     - Loop back to orchestrator for another analysis pass if the reflector
       flagged missing data and we have retries remaining.
-    - Go to HITL if any recommended action requires human approval.
+    - Go to HITL if any recommended action requires human approval (either
+      user-requested or proactively queued by a domain agent).
     - Otherwise proceed directly to the final response.
     """
     reflection = state.get("reflection")
-    if reflection and reflection.needs_more_data and state.get("retry_count", 0) < MAX_RETRIES:
+    if (
+        not state.get("action_requested")
+        and reflection
+        and reflection.needs_more_data
+        and state.get("retry_count", 0) < MAX_RETRIES
+    ):
         return "orchestrator"
-    if state.get("requires_hitl") and state.get("action_requested"):
-        # Guard: only go to HITL when there are actual recommendations to show.
-        # If recommendations is empty (data doesn't warrant action), fall through
-        # to final_response so the user gets an explanation instead of an empty card.
-        if state.get("recommended_actions"):
-            return "hitl"
+    if any(a.requires_approval for a in state.get("recommended_actions", [])):
+        return "hitl"
     return "final_response"

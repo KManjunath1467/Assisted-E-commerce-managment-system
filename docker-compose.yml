@@ -1,9 +1,4 @@
-# ═══════════════════════════════════════════════════════════════════════
-# E-Commerce Operations Assistant — All services
-# ═══════════════════════════════════════════════════════════════════════
-
 services:
-  # ── Application database ─────────────────────────────────────────────
   postgres-app:
     image: postgres:17-alpine
     container_name: ops-postgres
@@ -23,8 +18,6 @@ services:
       retries: 10
     networks:
       - ops-network
-
-  # ── Vector store ─────────────────────────────────────────────────────
   qdrant:
     image: qdrant/qdrant:v1.13.6
     container_name: qdrant
@@ -40,8 +33,6 @@ services:
     restart: always
     networks:
       - ops-network
-
-  # ── Unified MCP server (internal only — no host ports exposed) ────────
   mcp-operations:
     build:
       context: ./mcp_servers
@@ -72,7 +63,6 @@ services:
     networks:
       - ops-network
 
-  # ── Backend ──────────────────────────────────────────────────────────
   backend:
     build:
       context: .
@@ -118,8 +108,6 @@ services:
     networks:
       - ops-network
       - langfuse-network
-
-  # ── Frontend ─────────────────────────────────────────────────────────
   frontend:
     build:
       context: ./frontend
@@ -135,10 +123,6 @@ services:
         condition: service_healthy
     networks:
       - ops-network
-
-  # ═══════════════════════════════════════════════════════════════════════
-  # Langfuse observability stack
-  # ═══════════════════════════════════════════════════════════════════════
 
   langfuse-web:
     image: langfuse/langfuse:3
@@ -290,19 +274,11 @@ services:
     networks:
       - langfuse-network
 
-# ═══════════════════════════════════════════════════════════════════════
-# Networks
-# ═══════════════════════════════════════════════════════════════════════
-
 networks:
   ops-network:
     driver: bridge
   langfuse-network:
     driver: bridge
-
-# ═══════════════════════════════════════════════════════════════════════
-# Volumes
-# ═══════════════════════════════════════════════════════════════════════
 
 volumes:
   postgres_app_data:

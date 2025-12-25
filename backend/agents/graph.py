@@ -8,6 +8,7 @@ from langgraph.graph import END, START, StateGraph
 from agents.nodes import (
     aggregator_node,
     cx_node,
+    execute_approved_actions_node,
     final_response_node,
     hitl_node,
     inventory_node,
@@ -17,7 +18,7 @@ from agents.nodes import (
     router_node,
     sales_node,
 )
-from agents.routing import route_after_aggregator, route_after_reflector
+from agents.routing import route_after_aggregator, route_after_hitl, route_after_reflector
 from agents.state import GraphState
 from core.enums import AgentDomain
 
@@ -44,6 +45,7 @@ def build_graph(checkpointer=None):
     g.add_node("aggregator", aggregator_node)
     g.add_node("reflector", reflector_node)
     g.add_node("hitl", hitl_node)
+    g.add_node("execute_approved_actions", execute_approved_actions_node)
     g.add_node("final_response", final_response_node)
 
     g.add_edge(START, "router")
@@ -75,7 +77,15 @@ def build_graph(checkpointer=None):
         },
     )
 
-    g.add_edge("hitl", "final_response")
+    g.add_conditional_edges(
+        "hitl",
+        route_after_hitl,
+        {
+            "execute": "execute_approved_actions",
+            "final_response": "final_response",
+        },
+    )
+    g.add_edge("execute_approved_actions", "final_response")
     g.add_edge("final_response", END)
 
     return g.compile(checkpointer=effective_checkpointer)

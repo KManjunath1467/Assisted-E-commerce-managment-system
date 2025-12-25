@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+from domains.tool_registry import WRITE_ACTION_TOOLS
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.types import Command, Send, interrupt
 
@@ -14,10 +15,10 @@ from agents._domain_builders import (
     build_sales_finding,
 )
 from agents.factory import create_agent
-from agents.rules import build_recommendations
 from agents.state import GraphState
 from core.constants import DATA_START_DATE, MAX_RETRIES, REORDER_POINT
-from db.pg_store import get_actions_by_thread, persist_hitl_incident_and_actions, save_incident
+from core.enums import ActionType
+from db.pg_store import get_action_by_id, get_actions_by_thread, persist_hitl_incident_and_actions, save_incident
 from schemas.analysis import DomainFinding, ReflectionResult, RootCauseAnalysis
 from schemas.common import default_time_range
 from schemas.outputs import OperationsReport
@@ -43,6 +44,26 @@ def _format_findings_text(findings: list[DomainFinding]) -> str:
     return "\n\n".join(f"[{f.domain.upper()}]\n{f.data.model_dump_json(indent=2)}" for f in findings)
 
 
+def _extract_actions(tool_results: list[tuple[str, object]]) -> list:
+    """Convert captured write-action tool dicts into RecommendedAction instances."""
+    from schemas.actions import RecommendedAction
+
+    actions = []
+    for name, result in tool_results:
+        if name in WRITE_ACTION_TOOLS and isinstance(result, dict) and "action_type" in result:
+            actions.append(
+                RecommendedAction(
+                    action_type=ActionType(result["action_type"]),
+                    description=result.get("description", ""),
+                    rationale=result.get("reason", ""),
+                    requires_approval=True,
+                    targets=result.get("targets", []),
+                    parameters=result.get("parameters", {}),
+                )
+            )
+    return actions
+
+
 async def router_node(state: GraphState) -> dict:
     """Classify the query and determine which domain agents to run."""
     _, results = await _get_agent("router").run(query=state["query"])
@@ -55,7 +76,7 @@ async def router_node(state: GraphState) -> dict:
         "action_requested": intent.action_requested,
         "retry_count": 0,
         "domain_findings": None,
-        "recommended_actions": [],
+        "recommended_actions": None,
         "requires_hitl": False,
     }
 
@@ -74,7 +95,10 @@ def orchestrator_node(state: GraphState) -> Command:
 
     return Command(
         goto=sends if sends else "aggregator",
-        update={"requires_deep_analysis": (state.get("intent_type") == "broad" or len(domains) > 1)},
+        update={
+            "requires_deep_analysis": (state.get("intent_type") == "broad" or len(domains) > 1),
+            "reflection": None,
+        },
     )
 
 
@@ -89,9 +113,10 @@ async def sales_node(state: GraphState) -> dict:
         data_start_date=DATA_START_DATE,
         requires_deep_analysis=str(state.get("requires_deep_analysis", True)).lower(),
     )
-    results = {name: result for name, result in tool_results}
-    finding = build_sales_finding(results)
-    return {"domain_findings": [finding] if finding else []}
+    data_results = {name: result for name, result in tool_results if name not in WRITE_ACTION_TOOLS}
+    actions = _extract_actions(tool_results)
+    finding = build_sales_finding(data_results)
+    return {"domain_findings": [finding] if finding else [], "recommended_actions": actions}
 
 
 async def inventory_node(state: GraphState) -> dict:
@@ -105,9 +130,10 @@ async def inventory_node(state: GraphState) -> dict:
         reorder_point=REORDER_POINT,
         requires_deep_analysis=str(state.get("requires_deep_analysis", True)).lower(),
     )
-    results = {name: result for name, result in tool_results}
-    finding = build_inventory_finding(results)
-    return {"domain_findings": [finding] if finding else []}
+    data_results = {name: result for name, result in tool_results if name not in WRITE_ACTION_TOOLS}
+    actions = _extract_actions(tool_results)
+    finding = build_inventory_finding(data_results)
+    return {"domain_findings": [finding] if finding else [], "recommended_actions": actions}
 
 
 async def marketing_node(state: GraphState) -> dict:
@@ -116,9 +142,10 @@ async def marketing_node(state: GraphState) -> dict:
         query=state["query"],
         requires_deep_analysis=str(state.get("requires_deep_analysis", True)).lower(),
     )
-    results = {name: result for name, result in tool_results}
-    finding = build_marketing_finding(results)
-    return {"domain_findings": [finding] if finding else []}
+    data_results = {name: result for name, result in tool_results if name not in WRITE_ACTION_TOOLS}
+    actions = _extract_actions(tool_results)
+    finding = build_marketing_finding(data_results)
+    return {"domain_findings": [finding] if finding else [], "recommended_actions": actions}
 
 
 async def cx_node(state: GraphState) -> dict:
@@ -131,56 +158,44 @@ async def cx_node(state: GraphState) -> dict:
         analysis_date=analysis_date,
         requires_deep_analysis=str(state.get("requires_deep_analysis", True)).lower(),
     )
-    results = {name: result for name, result in tool_results}
-    finding = build_cx_finding(results)
-    return {"domain_findings": [finding] if finding else []}
+    data_results = {name: result for name, result in tool_results if name not in WRITE_ACTION_TOOLS}
+    actions = _extract_actions(tool_results)
+    finding = build_cx_finding(data_results)
+    return {"domain_findings": [finding] if finding else [], "recommended_actions": actions}
 
 
 async def aggregator_node(state: GraphState) -> dict:
-    """Produce a root cause analysis and recommendations from domain findings."""
+    """Produce a root cause analysis from domain findings.
+
+    Recommended actions are accumulated from domain nodes via the
+    _merge_actions reducer — the aggregator no longer builds them.
+    """
     findings = state.get("domain_findings") or []
     requires_deep = state.get("requires_deep_analysis", True)
     action_requested = state.get("action_requested", False)
 
-    # Always build recommendations from findings — even for targeted (non-deep)
-    # queries, actionable signals (low stock, bad ROAS, etc.) should surface
-    # suggestions when the data warrants it.
-    recommendations = build_recommendations(findings, action_requested=action_requested, query=state.get("query", ""))
-
     if not findings and state.get("domains_to_run"):
-        # Domain agents ran but returned nothing — nothing to aggregate.
-        return {"root_cause": None, "recommended_actions": recommendations}
+        return {"root_cause": None}
 
     findings_text = (
         _format_findings_text(findings) if findings else "No domain findings — this query does not require domain data."
     )
 
     if findings and not requires_deep and not action_requested:
-        # Simple factual lookup with domain data — skip deep analysis.
-        return {"root_cause": None, "recommended_actions": recommendations}
+        return {"root_cause": None}
 
     _, results = await _get_agent("aggregator").run(
         query=state["query"],
         findings_text=findings_text,
     )
 
-    # Extract the structured RootCauseAnalysis from captured results.
     root_cause: RootCauseAnalysis | None = None
     for name, result in results:
         if name == "__structured__" and isinstance(result, RootCauseAnalysis):
             root_cause = result
             break
 
-    logger.info(
-        "aggregator_node: built %d recommendations (action_requested=%s, requires_deep=%s)",
-        len(recommendations),
-        action_requested,
-        requires_deep,
-    )
-    return {
-        "root_cause": root_cause,
-        "recommended_actions": recommendations,
-    }
+    return {"root_cause": root_cause}
 
 
 async def reflector_node(state: GraphState) -> dict:
@@ -258,8 +273,68 @@ async def hitl_node(state: GraphState) -> dict:
         incident_id, action_rows = await persist_hitl_incident_and_actions(state, recommendations)
         logger.info("hitl_node: persisted %d action rows, interrupting", len(action_rows))
 
-    interrupt({"actions": action_rows})
-    return {"incident_id": incident_id}
+    resume_data = interrupt({"actions": action_rows})
+    approved_action_id = None
+    if resume_data and resume_data.get("approved") and resume_data.get("action_id"):
+        approved_action_id = resume_data["action_id"]
+    return {"incident_id": incident_id, "approved_action_id": approved_action_id}
+
+
+ACTION_EXECUTE_MAP: dict[ActionType, tuple[str, object]] = {
+    ActionType.RESTOCK: (
+        "execute_restock",
+        lambda p: {"targets": p.get("targets", []), "qty": p.get("quantity", 200)},
+    ),
+    ActionType.RUN_DISCOUNT: (
+        "execute_run_discount",
+        lambda p: {"targets": p.get("targets", []), "discount_pct": p.get("discount_pct", 15)},
+    ),
+    ActionType.PAUSE_CAMPAIGN: (
+        "execute_pause_campaign",
+        lambda p: {"targets": p.get("targets", [])},
+    ),
+    ActionType.RESUME_CAMPAIGN: (
+        "execute_resume_campaign",
+        lambda p: {"targets": p.get("targets", [])},
+    ),
+    ActionType.CREATE_SUPPORT_TICKET: (
+        "execute_create_support_ticket",
+        lambda p: {"description": p.get("description", "")},
+    ),
+}
+
+
+async def execute_approved_actions_node(state: GraphState) -> dict:
+    """Execute the approved action via MCP registry after HITL resume."""
+    import uuid as _uuid
+
+    from agents.mcp_registry import get_mcp_registry
+
+    action_id = state.get("approved_action_id")
+    if not action_id:
+        return {}
+
+    action = await get_action_by_id(_uuid.UUID(action_id))
+    if not action or action["status"] != "pending_approval":
+        return {}
+
+    entry = ACTION_EXECUTE_MAP.get(ActionType(action["action_type"]))
+    if not entry:
+        logger.warning("No execute mapping for action_type '%s'", action["action_type"])
+        return {}
+
+    tool_name, build_args = entry
+    registry = get_mcp_registry()
+    if registry is None:
+        logger.error("MCP registry unavailable for execute_approved_actions_node")
+        return {}
+
+    args = build_args(action.get("parameters") or {})
+    try:
+        await registry.call_tool(tool_name, args)
+    except Exception as exc:
+        logger.error("Execute tool '%s' failed for action %s: %s", tool_name, action_id, exc)
+    return {}
 
 
 async def final_response_node(state: GraphState) -> dict:

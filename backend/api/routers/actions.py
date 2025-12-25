@@ -75,6 +75,8 @@ async def approve_action(action_id: str, body: ActionApprovalResponse, request: 
     # Resume the LangGraph thread FIRST — while the action is still
     # PENDING_APPROVAL in the database so hitl_node correctly identifies
     # this as a resume (not a fresh HITL round on the same thread).
+    # On resume, execute_approved_actions_node will call the MCP write tool
+    # inside the graph (approved path only).
     if body.thread_id:
         try:
             graph = request.app.state.graph
@@ -101,8 +103,6 @@ async def approve_action(action_id: str, body: ActionApprovalResponse, request: 
                 exc,
             )
 
-    # Now apply the approval/rejection in the database and execute the
-    # business operation (restock, pause campaign, etc.).
     try:
         action, final_status, msg, executed_at = await approve_action_in_db(aid, body.approved, body.notes)
     except LookupError as exc:

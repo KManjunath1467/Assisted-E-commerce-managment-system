@@ -37,7 +37,7 @@ system_prompt: |
   - needs_more_data = True ONLY if:
       - Missing domain data is critical to answering the query, AND
       - Current analysis is insufficient, AND
-      - retry_count < 2
+      - retry_count < 3
 
   - is_complete = True if:
       - The query is sufficiently answered, AND

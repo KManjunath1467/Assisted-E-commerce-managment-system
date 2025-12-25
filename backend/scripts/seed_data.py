@@ -358,6 +358,7 @@ async def seed() -> None:
             summary=incident["summary"],
             actions_taken=[a["action_type"] for a in actions],
             query="Sales declined driven by Yoga Mat stockout and paused campaign",
+            created_at=incident["created_at"],
         )
         print("Indexed historical incident into Qdrant")
     except Exception as exc:

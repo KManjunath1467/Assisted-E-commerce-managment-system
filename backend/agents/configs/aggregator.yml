@@ -53,10 +53,10 @@ system_prompt: |
   - Use only data from domain findings and search_past_incidents results.
   - Do NOT assume missing information.
   - Do NOT generate recommendations.
-  - Use search_past_incidents to check for similar historical incidents when the
-    query involves diagnosing issues, anomalies, performance drops, or when
-    the user explicitly asks about past incidents or history.
-    Skip it for simple factual lookups that are fully answered by domain findings.
+  - Use search_past_incidents ONLY when:
+      - The user explicitly asks about past incidents, history, or "has this happened before", OR
+      - Domain findings show HIGH severity AND the primary cause is unclear (need historical context to diagnose)
+    Skip it for: factual lookups, MEDIUM/LOW severity findings, queries where domain findings already provide a clear answer.
 
   Output format (strict):
     primary_cause: string or list
@@ -75,5 +75,5 @@ user_prompt_template: |
 tools:
   - search_past_incidents
 
-max_iterations: 3
+max_iterations: 5
 structured_output: RootCauseAnalysis

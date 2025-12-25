@@ -119,7 +119,7 @@ def _get_llm() -> AzureChatOpenAI:
         api_key=settings.DIAL_API_KEY,
         api_version=settings.DIAL_API_VERSION,
         azure_deployment=settings.DIAL_DEPLOYMENT,
-        temperature=0,
+        temperature=0.0,
     )
 
 

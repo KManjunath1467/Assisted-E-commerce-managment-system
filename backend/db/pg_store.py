@@ -10,9 +10,8 @@ from typing import TYPE_CHECKING
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from core.constants import DISCOUNT_PCT
-from core.enums import ActionStatus, ActionType, CampaignStatus, IncidentStatus
-from db.models import Action, CampaignModel, Incident, Inventory, Thread, ThreadMessage, Ticket
+from core.enums import ActionStatus, IncidentStatus
+from db.models import Action, Incident, Thread, ThreadMessage
 from db.qdrant_store import index_incident
 from db.session import get_session_factory
 
@@ -21,9 +20,6 @@ logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from agents.state import GraphState
     from schemas.actions import RecommendedAction
-
-# How many units to add when a restock is approved.
-_RESTOCK_QTY = 200
 
 
 async def save_incident(state: GraphState) -> str | None:
@@ -98,6 +94,15 @@ async def persist_hitl_incident_and_actions(
     action_rows: list[dict] = []
 
     async with factory() as session:
+        # Ensure the thread row exists so the FK on actions.thread_id is satisfied.
+        if thread_id:
+            stmt = (
+                pg_insert(Thread)
+                .values(thread_id=thread_id, title=state.get("query", "")[:100])
+                .on_conflict_do_nothing()
+            )
+            await session.execute(stmt)
+
         if not incident_id:
             now = datetime.now(UTC)
             incident = Incident(
@@ -225,17 +230,21 @@ async def get_all_actions() -> list[dict]:
 
 
 async def approve_action_in_db(
-    action_id: uuid.UUID, approved: bool, notes: str | None
+    action_id: uuid.UUID,
+    approved: bool,
+    notes: str | None,
+    execution_msg: str | None = None,
 ) -> tuple[Action, ActionStatus, str, datetime | None]:
-    """Apply approval/rejection to an Action row and run the business operation.
+    """Apply approval/rejection to an Action row.
 
+    execution_msg is the result message from the MCP write tool (if any).
     Returns (action, final_status, message, executed_at).
     Raises LookupError on not-found, ValueError on wrong status.
     """
     factory = get_session_factory()
     async with factory() as session:
         # FOR UPDATE prevents two concurrent approvals from both reading
-        # PENDING_APPROVAL and both executing the business operation.
+        # PENDING_APPROVAL and racing on the status update.
         action = (
             await session.execute(select(Action).where(Action.id == action_id).with_for_update())
         ).scalar_one_or_none()
@@ -248,11 +257,9 @@ async def approve_action_in_db(
         executed_at: datetime | None = None
         if approved:
             executed_at = datetime.now(UTC)
-            # Run the actual business operation before marking as executed.
-            op_msg = await _execute_business_operation(session, action, executed_at)
             action.status = ActionStatus.EXECUTED
             action.executed_at = executed_at
-            msg = op_msg or f"Action '{action.description}' approved and executed."
+            msg = execution_msg or "Approved"
             final_status = ActionStatus.EXECUTED
         else:
             action.status = ActionStatus.REJECTED
@@ -261,105 +268,6 @@ async def approve_action_in_db(
 
         await session.commit()
         return action, final_status, msg, executed_at
-
-
-async def _execute_business_operation(session, action: Action, now: datetime) -> str | None:
-    """Run the domain-side database mutation for an approved action.
-
-    Returns a human-readable result message, or None to use the default.
-    The caller owns the session transaction and commits after this returns.
-    """
-    targets: list[str] = (action.parameters or {}).get("targets", [])
-    atype = action.action_type
-
-    if atype == ActionType.RESTOCK:
-        if not targets:
-            return None
-        updated = 0
-        for product_id in targets:
-            result = await session.execute(select(Inventory).where(Inventory.product_id == product_id))
-            inv = result.scalar_one_or_none()
-            if inv is not None:
-                inv.stock += _RESTOCK_QTY
-                inv.updated_at = now
-                updated += 1
-        return (
-            f"Restocked {updated} product(s) by {_RESTOCK_QTY} units each."
-            if updated
-            else f"No inventory rows found for targets: {targets}"
-        )
-
-    if atype == ActionType.PAUSE_CAMPAIGN:
-        if not targets:
-            return None
-        updated = 0
-        for campaign_id in targets:
-            try:
-                cid = uuid.UUID(campaign_id)
-            except ValueError:
-                logger.warning("Invalid campaign UUID: %s — skipping", campaign_id)
-                continue
-            result = await session.execute(select(CampaignModel).where(CampaignModel.id == cid))
-            camp = result.scalar_one_or_none()
-            if camp is not None and camp.status != CampaignStatus.PAUSED:
-                camp.status = CampaignStatus.PAUSED
-                updated += 1
-        return f"Paused {updated} campaign(s)." if updated else "Campaigns already paused."
-
-    if atype == ActionType.RESUME_CAMPAIGN:
-        if not targets:
-            return None
-        updated = 0
-        for campaign_id in targets:
-            try:
-                cid = uuid.UUID(campaign_id)
-            except ValueError:
-                logger.warning("Invalid campaign UUID: %s — skipping", campaign_id)
-                continue
-            result = await session.execute(select(CampaignModel).where(CampaignModel.id == cid))
-            camp = result.scalar_one_or_none()
-            if camp is not None and camp.status != CampaignStatus.ACTIVE:
-                camp.status = CampaignStatus.ACTIVE
-                updated += 1
-        return f"Resumed {updated} campaign(s)." if updated else "Campaigns already active."
-
-    if atype == ActionType.RUN_DISCOUNT:
-        # Targets are product_ids. Set discount_pct and activate the discount
-        # flag on each product; unit_price remains the canonical base price.
-        if not targets:
-            return None
-        from db.models import Product
-
-        pct = int((action.parameters or {}).get("discount_pct", DISCOUNT_PCT))
-        updated = 0
-        for product_id in targets:
-            result = await session.execute(select(Product).where(Product.product_id == product_id))
-            prod = result.scalar_one_or_none()
-            if prod is not None:
-                prod.discount_pct = pct
-                prod.discount_active = True
-                updated += 1
-        return (
-            f"Discount of {pct}% activated for {updated} product(s). "
-            "unit_price unchanged; apply discount_pct at checkout."
-            if updated
-            else f"No products found for targets: {targets}"
-        )
-
-    if atype == ActionType.CREATE_SUPPORT_TICKET:
-        ticket = Ticket(
-            id=uuid.uuid4(),
-            date=now.date(),
-            category="escalation",
-            sentiment_score=-0.5,
-            is_refund=False,
-            is_return=False,
-            review_text=action.description,
-        )
-        session.add(ticket)
-        return f"Support ticket created for: {action.description}"
-
-    return None
 
 
 # ─── Incidents ────────────────────────────────────────────────────────────────
@@ -371,6 +279,7 @@ def _action_to_dict(row: Action) -> dict:
         "incident_id": str(row.incident_id),
         "action_type": row.action_type.value,
         "description": row.description,
+        "parameters": row.parameters or {},
         "status": row.status.value,
         "created_at": row.created_at.isoformat(),
         "executed_at": row.executed_at.isoformat() if row.executed_at else None,

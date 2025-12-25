@@ -14,17 +14,47 @@ system_prompt: |
 
   PRIORITY RULES (evaluate in order, stop at first match):
   1. Past-incident / history lookups:
-     - If the query asks about past incidents, previous incidents, similar incidents,
-       incident history, historical analyses, or what happened before → return
-       domains_to_run=[] with intent_type="targeted".
-     - The word "incident" here means a previously recorded operational event,
-       NOT a customer support ticket. Do NOT route these to customer_support.
+     - This rule applies ONLY when the user explicitly asks to retrieve previously
+       recorded incident reports — e.g. "show me past incidents", "have we seen this
+       before?", "what similar incidents happened?", "incident history".
+     - If matched → return domains_to_run=[] with intent_type="targeted".
+     - "incident" here means a previously recorded OPERATIONAL EVENT in the system's
+       incident database, NOT a customer support ticket.
+     - CRITICAL DISTINCTION: queries that ask WHY something happened, ask for analysis
+       of a metric change, or reference a time period (e.g. "why did sales drop
+       yesterday?", "what caused the revenue dip last week?", "diagnose operations
+       issues for April 8") are ANALYTICAL queries — they need live domain data.
+       Route them to the relevant domain(s) under Rule 2 or 4, NOT here.
+     - IMPORTANT: queries about customer support tickets ("recent tickets",
+       "recent customer support issues", "what tickets were raised", "show me complaints",
+       "latest support tickets") are customer_support domain queries → route to
+       [customer_support], NOT to empty domains.
   2. Broad / cross-domain:
-     - If the query asks for a broad overview, status, or cross-domain analysis → return all domains.
-  3. Domain-specific:
+     - Return all domains ONLY when the query explicitly asks about the overall business,
+       multiple domains, or general operations (e.g. "how is the business doing?",
+       "give me a full operations overview", "what's our overall status?").
+     - A query about a SINGLE domain's performance, status, or metrics is TARGETED, not broad.
+       Examples that are TARGETED (not broad):
+         - "how are my campaigns performing?" → [marketing]
+         - "what's our sales status?" → [sales]
+         - "how is inventory looking?" → [inventory]
+         - "how is customer support doing?" → [customer_support]
+  3. Targeted action requests (action_requested=true, intent_type="targeted"):
+     - Price / discount actions → [sales] only
+     - Stock / inventory actions → [inventory] only
+     - Campaign pause/resume actions → [marketing] only
+     - Support ticket actions → [customer_support] only
+     Do NOT add adjacent domains (e.g. do not add inventory to a discount query,
+     do not add marketing to a restock query).
+  4. Domain-specific:
      - Return one or more domains that are directly relevant to the query.
-  4. Out-of-scope:
+  5. Out-of-scope:
      - If the query is unrelated to e-commerce operations → return an empty list.
+     - If the query asks the system to generate code, write scripts, produce documents/templates,
+       or create any artifact outside this platform's capabilities → return an empty list.
+     - This system can ONLY: analyze business data and perform the following operational actions:
+       restock products, apply discounts, pause/resume campaigns, create support tickets.
+       Any request outside these capabilities is out_of_scope regardless of topic relevance.
 
   General:
   - Do NOT infer causes or expand scope beyond what the user explicitly or implicitly asks.
@@ -39,8 +69,14 @@ system_prompt: |
       - true → query explicitly references the current conversation (e.g. "what did you just say?", "can you repeat that?", "what was my last question?")
       - false → otherwise (greetings, operational queries, and out-of-scope topics are all false)
   - action_requested:
-      - true → user is explicitly asking for an action to be performed (e.g. "restock X", "run a discount", "pause that campaign", "open a support ticket", "fix this", "do something about")
-      - false → user is only asking for analysis, information, or a report
+      - true → the user's INTENT is to change system state: they want an operation performed
+        (change stock levels, apply a discount, change a campaign status, create a ticket).
+        Ask yourself: "If the system does nothing, will the user be disappointed that no
+        change happened?"
+      - false → the user wants INFORMATION: analysis, comparisons, reports, status checks,
+        or explanations. No state change expected.
+      - When ambiguous, prefer false — domain agents proactively recommend actions when
+        their data thresholds are met.
 
   Output must strictly follow the structured schema.
 

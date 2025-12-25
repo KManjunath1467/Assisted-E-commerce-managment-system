@@ -12,7 +12,7 @@ from sqlalchemy import (
     Table,
     Text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 
 metadata = MetaData()
 
@@ -23,6 +23,8 @@ products = Table(
     Column("name", String, key="name"),
     Column("category", String, key="category"),
     Column("unit_price", Numeric(10, 2), key="unit_price"),
+    Column("discount_pct", Numeric(5, 2), key="discount_pct"),
+    Column("discount_active", Boolean, key="discount_active"),
 )
 
 sales = Table(
@@ -45,7 +47,7 @@ inventory = Table(
 campaigns = Table(
     "campaigns",
     metadata,
-    Column("id", String, key="id"),
+    Column("id", UUID(as_uuid=True), key="id"),
     Column("name", String, key="name"),
     Column("channel", String, key="channel"),
     Column("status", String, key="status"),
@@ -55,7 +57,7 @@ campaigns = Table(
 tickets = Table(
     "tickets",
     metadata,
-    Column("id", String, key="id"),
+    Column("id", UUID(as_uuid=True), key="id"),
     Column("date", Date, key="date"),
     Column("category", String, key="category"),
     Column("sentiment_score", Float, key="sentiment_score"),

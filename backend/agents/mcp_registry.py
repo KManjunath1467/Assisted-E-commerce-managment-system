@@ -17,6 +17,7 @@ Note:
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
@@ -70,6 +71,7 @@ class MCPClientRegistry:
     def __init__(self) -> None:
         self._client: MultiServerMCPClient | None = None
         self._tools: dict[str, StructuredTool] = {}
+        self._all_tools: dict[str, StructuredTool] = {}
         self._enabled_domains: set[str] = set()
         self._live_tool_names: frozenset[str] = frozenset()
 
@@ -115,6 +117,7 @@ class MCPClientRegistry:
             )
 
         for tool in raw_tools:
+            self._all_tools[tool.name] = tool
             domain = TOOL_DOMAIN_MAP.get(tool.name)
             if domain and domain in self._enabled_domains:
                 self._tools[tool.name] = _wrap_with_retry(tool)
@@ -129,6 +132,36 @@ class MCPClientRegistry:
     def get_tool(self, name: str) -> StructuredTool | None:
         return self._tools.get(name)
 
+    async def call_tool(self, name: str, args: dict) -> dict:
+        """Call a tool by name, bypassing the USE_MCP_TOOLS agent filter.
+
+        Write tools are not exposed to LLM agents but must be callable directly
+        from the approve endpoint. Raises KeyError if the tool is not registered
+        on the MCP server, RuntimeError if the registry is not connected.
+        """
+        if not self._client:
+            raise RuntimeError("MCP registry is not connected.")
+        tool = self._all_tools.get(name)
+        if tool is None:
+            raise KeyError(f"Tool '{name}' not found on MCP server.")
+        result = await tool.ainvoke(args)
+        # MCP tools return (content, artifact) tuple via response_format="content_and_artifact"
+        if isinstance(result, tuple):
+            content, _ = result
+            if isinstance(content, list) and content:
+                text = content[0].get("text", "") if isinstance(content[0], dict) else str(content[0])
+                try:
+                    parsed = json.loads(text)
+                    if isinstance(parsed, dict):
+                        return parsed
+                except (json.JSONDecodeError, TypeError):
+                    pass
+                return {"message": text}
+            return {"message": str(content)}
+        if isinstance(result, dict):
+            return result
+        return {"message": str(result)}
+
     async def close(self) -> None:
         if self._client:
             try:
@@ -137,6 +170,7 @@ class MCPClientRegistry:
                 logger.warning("Error closing MCP client", exc_info=True)
             self._client = None
             self._tools.clear()
+            self._all_tools.clear()
             logger.info("MCP client connection closed")
 
 
