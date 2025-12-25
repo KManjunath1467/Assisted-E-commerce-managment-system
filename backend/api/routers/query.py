@@ -247,15 +247,6 @@ async def run_query_stream(body: Query, request: Request) -> StreamingResponse:
                     report=report,
                 )
 
-            # Stream the report summary word-by-word as token events before
-            # the terminal complete/pending_approval event so the frontend can
-            # render text progressively.
-            if response.status == "complete" and response.report:
-                words = response.report.summary.split(" ")
-                for i, word in enumerate(words):
-                    chunk = word if i == 0 else " " + word
-                    yield _sse_event("token", {"content": chunk})
-
             yield _sse_event(response.status, response.model_dump(mode="json"))
         finally:
             # Persist thread messages even if the client disconnects mid-stream.

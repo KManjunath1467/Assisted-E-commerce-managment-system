@@ -42,7 +42,6 @@ async function apiFetch<T>(
 
 export type StreamEvent =
   | { event: "node_complete"; data: { node: string } }
-  | { event: "token"; data: { content: string } }
   | { event: "complete"; data: QueryResponse }
   | { event: "pending_approval"; data: QueryResponse }
   | { event: "error"; data: { detail: string } };

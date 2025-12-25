@@ -105,16 +105,7 @@ export function MessageList({ messages, isLoading, onSend, onApprove }: Props) {
                       <Bot className="size-4" />
                     </div>
                     <div className="flex flex-1 flex-col items-start gap-1">
-                      {msg.streamedText ? (
-                        <div className="w-full rounded-2xl rounded-bl-sm border border-border bg-card px-4 py-3.5 shadow-sm">
-                          <p className="text-sm leading-relaxed text-foreground/90 font-[450] whitespace-pre-wrap">
-                            {msg.streamedText}
-                            <span className="inline-block w-1.5 h-4 ml-0.5 bg-primary/60 animate-pulse rounded-sm align-text-bottom" />
-                          </p>
-                        </div>
-                      ) : (
-                        <StreamingProgress currentNode={msg.currentNode} />
-                      )}
+                      <StreamingProgress currentNode={msg.currentNode} />
                     </div>
                   </div>
                 )}

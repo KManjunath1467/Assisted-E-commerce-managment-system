@@ -67,7 +67,6 @@ export function useChat() {
         id: streamId,
         type: "streaming",
         currentNode: null,
-        streamedText: "",
         timestamp: nowIso(),
       };
       setMessages((prev) => [...prev, userMsg, streamMsg]);
@@ -85,18 +84,6 @@ export function useChat() {
               prev.map((m) =>
                 m.id === streamId && m.type === "streaming"
                   ? { ...m, currentNode: event.data.node }
-                  : m,
-              ),
-            );
-          } else if (event.event === "token") {
-            setMessages((prev) =>
-              prev.map((m) =>
-                m.id === streamId && m.type === "streaming"
-                  ? {
-                      ...m,
-                      streamedText: m.streamedText + event.data.content,
-                      currentNode: null,
-                    }
                   : m,
               ),
             );
