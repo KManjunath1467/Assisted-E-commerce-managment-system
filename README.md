@@ -4,8 +4,11 @@
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi)
 ![LangGraph](https://img.shields.io/badge/LangGraph-0.4-1C3C3C?logo=langchain)
+![LangChain](https://img.shields.io/badge/LangChain-0.3-1C3C3C?logo=langchain)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
+![uv](https://img.shields.io/badge/uv-Package%20Manager-DE5FE9?logo=uv)
+![Bun](https://img.shields.io/badge/Bun-Runtime-f9f1e1?logo=bun)
 
 An AI-powered operations platform that acts as a smart business manager for an online store. Ask natural language questions like "Why did sales drop yesterday?" and the system investigates across sales, inventory, marketing, and customer support domains, explains its findings, and suggests corrective actions with human approval.
 
@@ -112,6 +115,7 @@ mcp_servers/      FastMCP tool server with domain-specific tools
 
 ```bash
 cd backend
+uv sync
 uv run alembic upgrade head
 uv run uvicorn main:app --reload --port 8000
 ```
@@ -120,6 +124,7 @@ uv run uvicorn main:app --reload --port 8000
 
 ```bash
 cd mcp_servers
+uv sync
 uv run python -m server
 ```
 
