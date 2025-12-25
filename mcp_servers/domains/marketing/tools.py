@@ -1,6 +1,9 @@
 """Marketing domain MCP tools — business logic only, delegates SQL to repository."""
 
-from datetime import date
+from datetime import UTC, datetime
+
+from db import get_session_factory
+from domains.common import parse_date
 
 from .repository import MarketingRepository
 from .schemas import (
@@ -14,19 +17,17 @@ from .schemas import (
 ROAS_THRESHOLD = 1.5
 
 
-def _parse_date(d: str) -> date:
-    return date.fromisoformat(d)
-
-
 async def get_campaign_status(start_date: str = "") -> dict:
     """Get all marketing campaigns, flag underperformers (ROAS < 1.5), and identify the worst channel.
 
     Args:
         start_date: Optional ISO date (YYYY-MM-DD) for the campaign analysis period. Defaults to today when empty.
     """
-    analysis_date = _parse_date(start_date) if start_date else date.today()
-    repo = MarketingRepository()
-    rows = await repo.fetch_campaigns()
+    analysis_date = parse_date(start_date) if start_date else datetime.now(UTC).date()
+    factory = get_session_factory()
+    async with factory() as session:
+        repo = MarketingRepository(session)
+        rows = await repo.fetch_campaigns()
 
     campaigns = []
     underperforming = []

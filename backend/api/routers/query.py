@@ -204,67 +204,70 @@ async def run_query_stream(body: Query, request: Request) -> StreamingResponse:
     await _clear_stale_interrupt(graph, config, thread_id)
 
     async def _event_stream():
+        response: QueryResponse | None = None
         try:
-            async for update in graph.astream(initial_state, config=config, stream_mode="updates"):
-                for node_name in update:
-                    if node_name in _GRAPH_NODES:
-                        yield _sse_event("node_complete", {"node": node_name})
-        except Exception as exc:
-            logger.exception("SSE stream failed for thread %s", thread_id)
-            detail = str(exc) if settings.debug else "Internal processing error."
-            yield _sse_event("error", {"detail": detail})
-            return
-
-        # Read final graph state from the checkpointer to build the response.
-        state_snapshot = await graph.aget_state(config)
-        result = state_snapshot.values
-
-        if state_snapshot.next:
-            # Graph is suspended (HITL interrupt).
-            tasks = state_snapshot.tasks or ()
-            payload: dict = {}
-            for task in tasks:
-                if hasattr(task, "interrupts") and task.interrupts:
-                    intr = task.interrupts[0]
-                    payload = intr.value if hasattr(intr, "value") else intr
-                    break
-            pending = payload.get("actions", []) if isinstance(payload, dict) else []
-            response = QueryResponse(
-                status="pending_approval",
-                thread_id=thread_id,
-                pending_actions=pending,
-            )
-        else:
-            report = result.get("report")
-            if report is None:
-                yield _sse_event("error", {"detail": "Graph did not produce a report."})
+            try:
+                async for update in graph.astream(initial_state, config=config, stream_mode="updates"):
+                    for node_name in update:
+                        if node_name in _GRAPH_NODES:
+                            yield _sse_event("node_complete", {"node": node_name})
+            except Exception as exc:
+                logger.exception("SSE stream failed for thread %s", thread_id)
+                detail = str(exc) if settings.debug else "Internal processing error."
+                yield _sse_event("error", {"detail": detail})
                 return
-            response = QueryResponse(
-                status="complete",
-                thread_id=thread_id,
-                report=report,
-            )
 
-        # Stream the report summary word-by-word as token events before
-        # the terminal complete/pending_approval event so the frontend can
-        # render text progressively.
-        if response.status == "complete" and response.report:
-            words = response.report.summary.split(" ")
-            for i, word in enumerate(words):
-                chunk = word if i == 0 else " " + word
-                yield _sse_event("token", {"content": chunk})
+            # Read final graph state from the checkpointer to build the response.
+            state_snapshot = await graph.aget_state(config)
+            result = state_snapshot.values
 
-        yield _sse_event(response.status, response.model_dump(mode="json"))
+            if state_snapshot.next:
+                # Graph is suspended (HITL interrupt).
+                tasks = state_snapshot.tasks or ()
+                payload: dict = {}
+                for task in tasks:
+                    if hasattr(task, "interrupts") and task.interrupts:
+                        intr = task.interrupts[0]
+                        payload = intr.value if hasattr(intr, "value") else intr
+                        break
+                pending = payload.get("actions", []) if isinstance(payload, dict) else []
+                response = QueryResponse(
+                    status="pending_approval",
+                    thread_id=thread_id,
+                    pending_actions=pending,
+                )
+            else:
+                report = result.get("report")
+                if report is None:
+                    yield _sse_event("error", {"detail": "Graph did not produce a report."})
+                    return
+                response = QueryResponse(
+                    status="complete",
+                    thread_id=thread_id,
+                    report=report,
+                )
 
-        # Persist thread messages (thread row already ensured before streaming).
-        try:
-            await persist_thread_messages(
-                thread_id,
-                user_content={"text": body.query},
-                assistant_content=response.model_dump(mode="json"),
-            )
-        except Exception:
-            logger.warning("Thread persistence failed for thread %s (SSE)", thread_id, exc_info=True)
+            # Stream the report summary word-by-word as token events before
+            # the terminal complete/pending_approval event so the frontend can
+            # render text progressively.
+            if response.status == "complete" and response.report:
+                words = response.report.summary.split(" ")
+                for i, word in enumerate(words):
+                    chunk = word if i == 0 else " " + word
+                    yield _sse_event("token", {"content": chunk})
+
+            yield _sse_event(response.status, response.model_dump(mode="json"))
+        finally:
+            # Persist thread messages even if the client disconnects mid-stream.
+            if response is not None:
+                try:
+                    await persist_thread_messages(
+                        thread_id,
+                        user_content={"text": body.query},
+                        assistant_content=response.model_dump(mode="json"),
+                    )
+                except Exception:
+                    logger.warning("Thread persistence failed for thread %s (SSE)", thread_id, exc_info=True)
 
     return StreamingResponse(
         _event_stream(),

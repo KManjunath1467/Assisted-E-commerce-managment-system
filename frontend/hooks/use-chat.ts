@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { approveAction, postQueryStream } from "@/lib/api";
 import type {
   ActionExecutionResult,
@@ -29,11 +29,29 @@ export function useChat() {
   const messagesRef = useRef<ChatMessage[]>(messages);
   messagesRef.current = messages;
 
+  // Synchronous guard to prevent double-submission (useRef, not state).
+  const sendingRef = useRef(false);
+  // AbortController for the current SSE stream — aborted on unmount.
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Abort any in-flight stream on unmount.
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
+
   // ─── Send a user message ──────────────────────────────────────────────────
 
   const sendMessage = useCallback(
     async (text: string, timeRange?: TimeRange | null) => {
-      if (isLoading || !text.trim()) return;
+      if (sendingRef.current || !text.trim()) return;
+      sendingRef.current = true;
+
+      // Abort any previous stream still in flight.
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
 
       // Append the user bubble immediately.
       const userMsg: UserMessage = {
@@ -60,6 +78,7 @@ export function useChat() {
           text.trim(),
           threadIdRef.current,
           timeRange,
+          controller.signal,
         )) {
           if (event.event === "node_complete") {
             setMessages((prev) =>
@@ -85,10 +104,11 @@ export function useChat() {
             const response = event.data;
             threadIdRef.current = response.thread_id;
             setActiveThreadId(response.thread_id);
+            if (!response.report) return;
             const reportMsg: ReportMessage = {
               id: newId(),
               type: "report",
-              report: response.report!,
+              report: response.report,
               thread_id: response.thread_id,
               timestamp: nowIso(),
             };
@@ -124,6 +144,8 @@ export function useChat() {
           }
         }
       } catch (err) {
+        // Ignore abort errors — they're expected on unmount / new message.
+        if (err instanceof DOMException && err.name === "AbortError") return;
         const errorMsg: ErrorMessage = {
           id: newId(),
           type: "error",
@@ -139,9 +161,10 @@ export function useChat() {
         );
       } finally {
         setIsLoading(false);
+        sendingRef.current = false;
       }
     },
-    [isLoading],
+    [],
   );
 
   // ─── Approve or reject a pending action ──────────────────────────────────
@@ -191,9 +214,12 @@ export function useChat() {
   // ─── Helpers ──────────────────────────────────────────────────────────────
 
   const startNewChat = useCallback(() => {
+    abortRef.current?.abort();
     setMessages([]);
     threadIdRef.current = null;
     setActiveThreadId(null);
+    sendingRef.current = false;
+    setIsLoading(false);
   }, []);
 
   const loadThread = useCallback(
@@ -208,7 +234,6 @@ export function useChat() {
   return {
     messages,
     isLoading,
-    threadId: threadIdRef.current,
     activeThreadId,
     sendMessage,
     handleApprove,

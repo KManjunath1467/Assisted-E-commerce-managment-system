@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from domains.customer_support.tools import get_customer_support_snapshot
 from domains.inventory.tools import get_inventory_snapshot, get_stockout_impact
 from domains.marketing.tools import get_campaign_status
-from domains.memory.tools import search_past_incidents
+from domains.memory.tools import preload_model, search_past_incidents
 from domains.sales.tools import (
     compare_sales_periods,
     detect_revenue_anomalies,
@@ -73,5 +73,8 @@ mcp.tool()(search_past_incidents)
 
 if __name__ == "__main__":
     settings = get_settings()
+    # Pre-load the embedding model so the first search_past_incidents call
+    # doesn't block the event loop with a ~130MB download + model init.
+    preload_model()
     logger.info("Starting operations MCP server on %s:%s", settings.HOST, settings.PORT)
     mcp.run(transport="streamable-http", host=settings.HOST, port=settings.PORT)

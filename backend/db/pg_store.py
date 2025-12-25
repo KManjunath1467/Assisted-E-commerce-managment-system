@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from core.constants import DISCOUNT_PCT
 from core.enums import ActionStatus, ActionType, CampaignStatus, IncidentStatus
@@ -244,22 +245,22 @@ async def approve_action_in_db(
         if action.status != ActionStatus.PENDING_APPROVAL:
             raise ValueError(f"Action is not pending approval (current status: {action.status}).")
 
-        now = datetime.now(UTC)
+        executed_at: datetime | None = None
         if approved:
+            executed_at = datetime.now(UTC)
             # Run the actual business operation before marking as executed.
-            op_msg = await _execute_business_operation(session, action, now)
+            op_msg = await _execute_business_operation(session, action, executed_at)
             action.status = ActionStatus.EXECUTED
-            action.executed_at = now
+            action.executed_at = executed_at
             msg = op_msg or f"Action '{action.description}' approved and executed."
             final_status = ActionStatus.EXECUTED
         else:
             action.status = ActionStatus.REJECTED
-            now = None  # type: ignore[assignment]
             msg = f"Action '{action.description}' rejected. Notes: {notes or 'none'}"
             final_status = ActionStatus.REJECTED
 
         await session.commit()
-        return action, final_status, msg, now
+        return action, final_status, msg, executed_at
 
 
 async def _execute_business_operation(session, action: Action, now: datetime) -> str | None:
@@ -293,7 +294,12 @@ async def _execute_business_operation(session, action: Action, now: datetime) ->
             return None
         updated = 0
         for campaign_id in targets:
-            result = await session.execute(select(CampaignModel).where(CampaignModel.id == uuid.UUID(campaign_id)))
+            try:
+                cid = uuid.UUID(campaign_id)
+            except ValueError:
+                logger.warning("Invalid campaign UUID: %s — skipping", campaign_id)
+                continue
+            result = await session.execute(select(CampaignModel).where(CampaignModel.id == cid))
             camp = result.scalar_one_or_none()
             if camp is not None and camp.status != CampaignStatus.PAUSED:
                 camp.status = CampaignStatus.PAUSED
@@ -305,7 +311,12 @@ async def _execute_business_operation(session, action: Action, now: datetime) ->
             return None
         updated = 0
         for campaign_id in targets:
-            result = await session.execute(select(CampaignModel).where(CampaignModel.id == uuid.UUID(campaign_id)))
+            try:
+                cid = uuid.UUID(campaign_id)
+            except ValueError:
+                logger.warning("Invalid campaign UUID: %s — skipping", campaign_id)
+                continue
+            result = await session.execute(select(CampaignModel).where(CampaignModel.id == cid))
             camp = result.scalar_one_or_none()
             if camp is not None and camp.status != CampaignStatus.ACTIVE:
                 camp.status = CampaignStatus.ACTIVE
@@ -494,11 +505,15 @@ async def ensure_thread(thread_id: str, title: str) -> None:
     """Create or update a thread row. Safe to call multiple times (upsert)."""
     factory = get_session_factory()
     async with factory() as session:
-        existing = (await session.execute(select(Thread).where(Thread.thread_id == thread_id))).scalar_one_or_none()
-        if existing is None:
-            session.add(Thread(thread_id=thread_id, title=title[:100]))
-        else:
-            existing.updated_at = datetime.now(UTC)
+        stmt = (
+            pg_insert(Thread)
+            .values(thread_id=thread_id, title=title[:100])
+            .on_conflict_do_update(
+                index_elements=[Thread.thread_id],
+                set_={"updated_at": datetime.now(UTC)},
+            )
+        )
+        await session.execute(stmt)
         await session.commit()
 
 

@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     # API server
     api_host: str = "0.0.0.0"
     api_port: int = 8000
+    cors_origins: str = "http://localhost:3001,http://localhost:3000"
 
     # Database
     DATABASE_URL: str

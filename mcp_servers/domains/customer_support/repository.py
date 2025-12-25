@@ -3,40 +3,24 @@
 from datetime import date
 
 from db import get_session_factory
-from sqlalchemy import (
-    Boolean,
-    Column,
-    Date,
-    Float,
-    MetaData,
-    String,
-    Table,
-    Text,
-    select,
-)
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-_meta = MetaData()
-
-_tickets = Table(
-    "tickets",
-    _meta,
-    Column("id", String, key="id"),
-    Column("date", Date, key="date"),
-    Column("category", String, key="category"),
-    Column("sentiment_score", Float, key="sentiment_score"),
-    Column("is_refund", Boolean, key="is_refund"),
-    Column("is_return", Boolean, key="is_return"),
-    Column("review_text", Text, key="review_text"),
-)
+from domains.db_tables import tickets as _tickets
 
 
 class CustomerSupportRepository:
     """Read-only queries against the tickets table."""
 
+    def __init__(self, session: AsyncSession | None = None) -> None:
+        self._session = session
+
     async def fetch_tickets_by_date(self, target: date) -> list[dict]:
+        stmt = select(_tickets).where(_tickets.c.date == target)
+        if self._session:
+            result = await self._session.execute(stmt)
+            return [dict(r._mapping) for r in result.all()]
         factory = get_session_factory()
         async with factory() as session:
-            result = await session.execute(
-                select(_tickets).where(_tickets.c.date == target)
-            )
+            result = await session.execute(stmt)
             return [dict(r._mapping) for r in result.all()]

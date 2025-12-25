@@ -7,6 +7,8 @@ when deserialising MCP tool responses.
 
 from enum import Enum
 
+from domains.common import CampaignStatus, Channel, Severity  # noqa: F401 — re-export
+
 
 class AgentDomain(str, Enum):
     SALES = "sales"

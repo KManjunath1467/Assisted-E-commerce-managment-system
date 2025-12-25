@@ -3,7 +3,7 @@
 Both the MCP server and the backend import from here.
 """
 
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 
 from pydantic import BaseModel, Field
@@ -45,6 +45,16 @@ class ProductRef(BaseModel):
     product_id: str = Field(..., description="Unique product identifier")
     name: str = Field(..., description="Product display name")
     category: str | None = Field(None, description="Product category")
+
+
+def parse_date(d: str) -> date:
+    """Parse a YYYY-MM-DD string into a date, with a user-friendly error message."""
+    try:
+        return date.fromisoformat(d)
+    except ValueError:
+        raise ValueError(
+            f"Invalid date format: '{d}'. Expected YYYY-MM-DD (e.g. 2026-04-17)."
+        )
 
 
 class Anomaly(BaseModel):

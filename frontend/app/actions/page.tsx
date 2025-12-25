@@ -1,21 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
-import {
-  AlertCircle,
-  CheckCircle,
-  Clock,
-  MessageSquare,
-  RefreshCw,
-  XCircle,
-  Zap,
-} from "lucide-react";
+import { CheckCircle, Clock, Loader2, RefreshCw, XCircle, Zap } from "lucide-react";
 import { approveAction, getAllActions } from "@/lib/api";
 import type { PendingAction } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { FilterTabs } from "@/components/filter-tabs";
+import { PageHeader } from "@/components/page-header";
 
 const ACTION_TYPE_LABELS: Record<string, string> = {
   restock: "Restock",
@@ -97,7 +89,7 @@ function ActionRow({
             className="h-7 font-medium text-emerald-700 border-emerald-300 hover:bg-emerald-50 hover:border-emerald-400 dark:text-emerald-400 dark:border-emerald-800 dark:hover:bg-emerald-950 disabled:opacity-50"
           >
             {busy === "approve" ? (
-              <Clock className="mr-1 size-3 animate-spin" />
+              <Loader2 className="mr-1 size-3 animate-spin" />
             ) : (
               <CheckCircle className="mr-1 size-3" />
             )}
@@ -111,7 +103,7 @@ function ActionRow({
             className="h-7 font-medium text-destructive border-destructive/30 hover:bg-destructive/5 hover:border-destructive/50 disabled:opacity-50"
           >
             {busy === "reject" ? (
-              <Clock className="mr-1 size-3 animate-spin" />
+              <Loader2 className="mr-1 size-3 animate-spin" />
             ) : (
               <XCircle className="mr-1 size-3" />
             )}
@@ -159,6 +151,8 @@ export default function ActionsPage() {
     // Poll for status changes every 5 seconds so approvals from chat
     // (or other tabs) are reflected without a manual refresh.
     const interval = setInterval(async () => {
+      // Skip poll when tab is hidden — no need to burn requests nobody sees.
+      if (document.visibilityState === "hidden") return;
       try {
         const data = await getAllActions();
         setActions(data);
@@ -185,9 +179,13 @@ export default function ActionsPage() {
         ),
       );
     } catch (err) {
-      // 409 means the action was already approved/rejected (e.g. from chat).
-      // Refresh the full list to get the current state from the server.
-      await fetchData();
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("409")) {
+        // Action was already approved/rejected (e.g. from chat). Refresh.
+        await fetchData();
+      } else {
+        setError(`Action failed: ${msg}`);
+      }
     }
   }
 
@@ -207,74 +205,20 @@ export default function ActionsPage() {
 
   return (
     <div className="flex h-screen flex-col bg-background">
-      {/* Header */}
-      <header className="flex shrink-0 items-center gap-3 border-b border-border bg-background/90 px-6 py-3 backdrop-blur-sm shadow-sm">
-        <Zap className="size-5 text-primary" />
-        <span className="text-sm font-semibold text-foreground">Actions</span>
-        {pendingCount > 0 && (
-          <Badge variant="secondary" className="text-[0.65rem]">
-            {pendingCount} pending
-          </Badge>
-        )}
-        <div className="ml-auto flex items-center gap-2">
-          <Link href="/">
-            <Button variant="ghost" size="sm" className="text-xs gap-1.5">
-              <MessageSquare className="size-3.5" />
-              Chat
-            </Button>
-          </Link>
-          <Link href="/incidents">
-            <Button variant="ghost" size="sm" className="text-xs gap-1.5">
-              <AlertCircle className="size-3.5" />
-              Incidents
-            </Button>
-          </Link>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={fetchData}
-            disabled={isLoading}
-            className="text-xs gap-1.5"
-          >
-            <RefreshCw
-              className={`size-3.5 ${isLoading ? "animate-spin" : ""}`}
-            />
-            Refresh
-          </Button>
-          <ThemeToggle />
-        </div>
-      </header>
-
-      {/* Tabs */}
-      <div className="shrink-0 border-b border-border bg-background px-6">
-        <div className="mx-auto flex max-w-3xl gap-1">
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-xs font-medium transition-colors focus-visible:outline-none ${
-                activeTab === tab.key
-                  ? "border-primary text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {tab.label}
-              <span
-                className={`rounded-full px-1.5 py-0.5 text-[0.6rem] font-semibold ${
-                  activeTab === tab.key
-                    ? tab.key === "pending"
-                      ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
-                      : "bg-muted text-foreground"
-                    : "bg-muted text-muted-foreground"
-                }`}
-              >
-                {tab.count}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
+      <PageHeader
+        page="actions"
+        icon={Zap}
+        title="Actions"
+        badgeText={pendingCount > 0 ? `${pendingCount} pending` : undefined}
+        isLoading={isLoading}
+        onRefresh={fetchData}
+      />
+      <FilterTabs
+        tabs={tabs}
+        activeTab={activeTab}
+        warningKey="pending"
+        onChange={setActiveTab}
+      />
 
       {/* Content */}
       <main className="flex-1 overflow-y-auto px-6 py-6">

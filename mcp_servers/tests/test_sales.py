@@ -3,14 +3,17 @@
 Run:  cd mcp_servers && uv run pytest tests/test_sales.py -v
 """
 
+from datetime import date, timedelta
+
 from domains.sales.tools import (
     compare_sales_periods,
     detect_revenue_anomalies,
     get_daily_sales_metrics,
 )
 
-DIP_DAY = "2026-04-08"
-NORMAL_DAY = "2026-04-07"
+DIP_DAY = (date.today() - timedelta(days=1)).isoformat()
+NORMAL_DAY = (date.today() - timedelta(days=2)).isoformat()
+
 
 
 async def test_daily_sales_dip_day_lower_than_normal():

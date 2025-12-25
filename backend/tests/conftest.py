@@ -15,11 +15,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 @pytest.fixture(autouse=True)
 def _clear_agent_cache():
     """Clear the cached agents between tests so tool resolution is fresh."""
-    from agents.nodes import _get_agent
+    from agents.nodes import clear_agent_cache
 
-    _get_agent.cache_clear()
+    clear_agent_cache()
     yield
-    _get_agent.cache_clear()
+    clear_agent_cache()
 
 
 # ---------------------------------------------------------------------------

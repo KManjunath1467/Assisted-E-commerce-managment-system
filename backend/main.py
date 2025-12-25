@@ -77,16 +77,19 @@ async def lifespan(app: FastAPI):
         app.state.graph = build_graph()
         app.state.checkpointer_type = "memory"
         yield
+    finally:
+        # Flush any buffered Langfuse traces before process exit.
+        if os.environ.get("LANGFUSE_PUBLIC_KEY"):
+            try:
+                from langfuse import get_client
 
-    # Flush any buffered Langfuse traces before process exit.
-    if os.environ.get("LANGFUSE_PUBLIC_KEY"):
-        from langfuse import get_client
+                get_client().flush()
+            except Exception:
+                logger.warning("Langfuse flush failed", exc_info=True)
 
-        get_client().flush()
-
-    await close_mcp_registry()
-    await dispose_engine()
-    logger.info("Shutting down %s", settings.app_name)
+        await close_mcp_registry()
+        await dispose_engine()
+        logger.info("Shutting down %s", settings.app_name)
 
 
 app = FastAPI(
@@ -97,7 +100,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3001", "http://localhost:3000"],
+    allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

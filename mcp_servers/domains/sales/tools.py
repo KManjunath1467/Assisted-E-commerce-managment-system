@@ -2,20 +2,15 @@
 
 from datetime import UTC, date, datetime, timedelta
 
+from db import get_session_factory
+from domains.common import Anomaly, ProductRef, Severity, TimeRange, parse_date
+
 from .repository import SalesRepository
 from .schemas import (
-    Anomaly,
-    ProductRef,
     ProductRevenue,
     SalesAnalysis,
     SalesMetrics,
-    Severity,
-    TimeRange,
 )
-
-
-def _parse_date(d: str) -> date:
-    return date.fromisoformat(d)
 
 
 def _make_time_range(start_d: date, end_d: date | None = None) -> TimeRange:
@@ -91,10 +86,12 @@ async def get_daily_sales_metrics(start_date: str, end_date: str = "") -> dict:
         start_date: Start date in YYYY-MM-DD format.
         end_date: End date in YYYY-MM-DD format (inclusive). Omit or leave empty for a single day.
     """
-    repo = SalesRepository()
-    start = _parse_date(start_date)
-    end = _parse_date(end_date) if end_date else start
-    metrics, _ = await _sales_metrics_for_range(repo, start, end)
+    start = parse_date(start_date)
+    end = parse_date(end_date) if end_date else start
+    factory = get_session_factory()
+    async with factory() as session:
+        repo = SalesRepository(session)
+        metrics, _ = await _sales_metrics_for_range(repo, start, end)
     result = SalesAnalysis(
         kind="sales",
         period=_make_time_range(start, end),
@@ -111,24 +108,27 @@ async def compare_sales_periods(current_date: str, days_back: int = 7) -> dict:
         current_date: The target date in YYYY-MM-DD format.
         days_back: Number of prior days to average for comparison (default 7).
     """
-    repo = SalesRepository()
-    target = _parse_date(current_date)
-    current_metrics, _ = await _sales_metrics_for_range(repo, target, target)
+    if days_back < 1:
+        raise ValueError("days_back must be >= 1")
+    target = parse_date(current_date)
+    factory = get_session_factory()
+    async with factory() as session:
+        repo = SalesRepository(session)
+        current_metrics, _ = await _sales_metrics_for_range(repo, target, target)
 
-    prior_start = target - timedelta(days=days_back)
-    prior_end = target - timedelta(days=1)
-    prior_metrics, _ = await _sales_metrics_for_range(repo, prior_start, prior_end)
-    days_count = days_back or 1
+        prior_start = target - timedelta(days=days_back)
+        prior_end = target - timedelta(days=1)
+        prior_metrics, _ = await _sales_metrics_for_range(repo, prior_start, prior_end)
 
     comparison = SalesMetrics(
-        total_revenue=prior_metrics.total_revenue / days_count,
-        order_count=int(prior_metrics.order_count / days_count),
+        total_revenue=prior_metrics.total_revenue / days_back,
+        order_count=int(prior_metrics.order_count / days_back),
         avg_order_value=prior_metrics.avg_order_value,
         top_products=[
-            ProductRevenue(product=p.product, revenue=p.revenue / days_count)
+            ProductRevenue(product=p.product, revenue=p.revenue / days_back)
             for p in prior_metrics.top_products
         ],
-        by_region={k: v / days_count for k, v in prior_metrics.by_region.items()},
+        by_region={k: v / days_back for k, v in prior_metrics.by_region.items()},
     )
 
     insights = _generate_insights(current_metrics)
@@ -156,13 +156,15 @@ async def detect_revenue_anomalies(current_date: str) -> list[dict]:
     Args:
         current_date: The date to check for anomalies in YYYY-MM-DD format.
     """
-    repo = SalesRepository()
-    target = _parse_date(current_date)
-    current_metrics, _ = await _sales_metrics_for_range(repo, target, target)
+    target = parse_date(current_date)
+    factory = get_session_factory()
+    async with factory() as session:
+        repo = SalesRepository(session)
+        current_metrics, _ = await _sales_metrics_for_range(repo, target, target)
 
-    prior_start = target - timedelta(days=7)
-    prior_end = target - timedelta(days=1)
-    prior_rows = await repo.fetch_sales_by_date_range(prior_start, prior_end)
+        prior_start = target - timedelta(days=7)
+        prior_end = target - timedelta(days=1)
+        prior_rows = await repo.fetch_sales_by_date_range(prior_start, prior_end)
 
     daily_revs: dict[date, float] = {}
     for r in prior_rows:

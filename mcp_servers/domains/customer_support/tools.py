@@ -1,14 +1,13 @@
 """Customer support domain MCP tools — business logic only, delegates SQL to repository."""
 
 from collections import defaultdict
-from datetime import date, timedelta
+from datetime import timedelta
+
+from db import get_session_factory
+from domains.common import parse_date
 
 from .repository import CustomerSupportRepository
 from .schemas import CustomerComplaint, CustomerSupportAnalysis
-
-
-def _parse_date(d: str) -> date:
-    return date.fromisoformat(d)
 
 
 async def get_customer_support_snapshot(date_str: str) -> dict:
@@ -17,12 +16,14 @@ async def get_customer_support_snapshot(date_str: str) -> dict:
     Args:
         date_str: Target date in YYYY-MM-DD format.
     """
-    target = _parse_date(date_str)
+    target = parse_date(date_str)
     prior = target - timedelta(days=1)
 
-    repo = CustomerSupportRepository()
-    target_rows = await repo.fetch_tickets_by_date(target)
-    prior_rows = await repo.fetch_tickets_by_date(prior)
+    factory = get_session_factory()
+    async with factory() as session:
+        repo = CustomerSupportRepository(session)
+        target_rows = await repo.fetch_tickets_by_date(target)
+        prior_rows = await repo.fetch_tickets_by_date(prior)
 
     period_tickets = len(target_rows)
     previous_period_tickets = len(prior_rows)

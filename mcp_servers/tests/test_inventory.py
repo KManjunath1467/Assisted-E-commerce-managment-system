@@ -3,9 +3,11 @@
 Run:  cd mcp_servers && uv run pytest tests/test_inventory.py -v
 """
 
+from datetime import date, timedelta
+
 from domains.inventory.tools import get_inventory_snapshot, get_stockout_impact
 
-DIP_DAY = "2026-04-08"
+DIP_DAY = (date.today() - timedelta(days=1)).isoformat()
 REORDER_POINT = 30
 
 
