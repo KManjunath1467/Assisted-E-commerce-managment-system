@@ -4,9 +4,10 @@ import uuid as _uuid
 from datetime import UTC, datetime
 
 from db import get_session_factory
+from sqlalchemy import update
+
 from domains.common import parse_date
 from domains.db_tables import campaigns as _campaigns
-from sqlalchemy import update
 
 from .repository import MarketingRepository
 from .schemas import (
