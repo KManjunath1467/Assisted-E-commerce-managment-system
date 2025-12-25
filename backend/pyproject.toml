@@ -1,0 +1,92 @@
+[project]
+name = "backend"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "alembic>=1.15",
+    "asyncpg>=0.30",
+    "fastapi>=0.115",
+    "httpx>=0.28",
+    "langchain>=1.2",
+    "langchain-community>=0.3",
+    "langchain-openai>=0.3",
+    "langchain-qdrant>=0.2",
+    "pyyaml>=6.0",
+    "qdrant-client[fastembed]>=1.9",
+    "langgraph>=0.4",
+    "langgraph-checkpoint-postgres>=2.0",
+    "pydantic-settings>=2.13.1",
+    "sqlalchemy[asyncio]>=2.0",
+    "uvicorn[standard]>=0.34",
+    "langfuse>=4.2.0",
+    "langchain-mcp-adapters>=0.1",
+    "tenacity>=9.0",
+    "mcp-operations",
+]
+
+[tool.uv.sources]
+mcp-operations = { path = "../mcp_servers", editable = true }
+
+[dependency-groups]
+dev = [
+    "deepeval>=2.0",
+    "pre-commit>=4.2",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.25",
+    "pytest-cov>=6.0",
+    "ruff>=0.11",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+extend-exclude = ["db/migrations"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+]
+ignore = [
+    "UP042",  # str+Enum → StrEnum; kept for SQLAlchemy Enum column compat
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+# GEval LLM-judge metrics are inherently non-deterministic; allow up to 2 reruns
+# for LLM eval tests before counting them as failures.
+reruns = 2
+reruns_delay = 1
+filterwarnings = [
+    # LangGraph msgpack serde warns about unregistered custom types.
+    # This is informational only; it will not break until a future LangGraph release.
+    "ignore:Deserializing unregistered type:UserWarning:langgraph",
+    # LangSmith API key not set in CI/test environments — expected.
+    "ignore::langsmith.utils.LangSmithMissingAPIKeyWarning",
+    # MCP library deprecation — will switch to streamable_http_client in a future upgrade.
+    "ignore:Use `streamable_http_client` instead:DeprecationWarning",
+    # DeepEval internal pydantic serialization noise — not actionable on our side.
+    "ignore:Pydantic serializer warnings:UserWarning:pydantic",
+]
+
+[tool.coverage.run]
+source = ["."]
+omit = [
+    "tests/*",
+    "db/migrations/*",
+    "scripts/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 50
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
