@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { AlertCircle, Bot, ShoppingBag } from "lucide-react";
+import {
+  AlertCircle,
+  BarChart2,
+  Package,
+  Megaphone,
+  MessageCircle,
+} from "lucide-react";
 import { HitlActionCard } from "@/components/chat/hitl-action-card";
 import { MessageBubble } from "@/components/chat/message-bubble";
 import { StreamingProgress } from "@/components/chat/message-skeleton";
@@ -21,17 +27,18 @@ interface Props {
 }
 
 const EXAMPLE_PROMPTS = [
-  "Why did sales drop yesterday?",
-  "Which products are low on stock?",
-  "How are my campaigns performing?",
-  "Show me recent customer support issues.",
+  { text: "Why did sales drop yesterday?", icon: BarChart2 },
+  { text: "Which products are low on stock?", icon: Package },
+  { text: "How are my campaigns performing?", icon: Megaphone },
+  { text: "Show me recent customer support issues.", icon: MessageCircle },
 ];
 
 function EmptyState({ onSend }: { onSend: (text: string) => void }) {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-4 px-6 pt-12 text-center">
-      <div className="flex size-14 items-center justify-center rounded-md border border-primary/20 bg-primary/10">
-        <ShoppingBag className="size-6 text-primary" />
+    <div className="flex h-full flex-col items-center justify-center gap-5 px-6 pt-12 text-center">
+      <div className="relative flex size-14 items-center justify-center rounded-xl border border-primary/20 bg-primary/10">
+        <div className="absolute inset-0 rounded-xl bg-gradient-to-b from-primary/5 to-primary/20" />
+        <BarChart2 className="relative size-6 text-primary" />
       </div>
       <div>
         <p className="text-sm font-semibold text-foreground">
@@ -42,15 +49,16 @@ function EmptyState({ onSend }: { onSend: (text: string) => void }) {
           support.
         </p>
       </div>
-      <div className="mt-1 flex flex-wrap justify-center gap-2">
-        {EXAMPLE_PROMPTS.map((prompt) => (
+      <div className="mt-1 grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {EXAMPLE_PROMPTS.map(({ text, icon: Icon }) => (
           <button
-            key={prompt}
+            key={text}
             type="button"
-            onClick={() => onSend(prompt)}
-            className="cursor-pointer rounded border border-border px-3 py-1.5 text-[0.75rem] font-medium text-muted-foreground transition-colors hover:border-foreground/30 hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={() => onSend(text)}
+            className="flex cursor-pointer items-center gap-2 rounded-lg bg-secondary px-3 py-2 text-left text-[0.75rem] font-medium text-secondary-foreground transition-all hover:bg-accent hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            {prompt}
+            <Icon className="size-3.5 shrink-0 text-muted-foreground" />
+            {text}
           </button>
         ))}
       </div>
@@ -100,14 +108,7 @@ export function MessageList({ messages, isLoading, onSend, onApprove }: Props) {
                 )}
                 {msg.type === "error" && <ErrorBubble text={msg.text} />}
                 {msg.type === "streaming" && (
-                  <div className="flex w-full max-w-3xl items-end gap-2">
-                    <div className="mb-5 flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                      <Bot className="size-4" />
-                    </div>
-                    <div className="flex flex-1 flex-col items-start gap-1">
-                      <StreamingProgress currentNode={msg.currentNode} />
-                    </div>
-                  </div>
+                  <StreamingProgress currentNode={msg.currentNode} />
                 )}
               </div>
             ))}

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { AlertCircle, Bot, Zap } from "lucide-react";
 import { getThreadHistory } from "@/lib/api";
 import type {
@@ -70,6 +71,11 @@ function rebuildMessages(items: ThreadMessageItem[]): ChatMessage[] {
   return messages;
 }
 
+const NAV_LINKS = [
+  { href: "/incidents", label: "Incidents", icon: AlertCircle },
+  { href: "/actions", label: "Actions", icon: Zap },
+];
+
 export function ChatInterface() {
   const {
     messages,
@@ -82,6 +88,7 @@ export function ChatInterface() {
   } = useChat();
   const { threads, isLoading: threadsLoading, fetchThreads } = useThreads();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const pathname = usePathname();
 
   async function handleSendMessage(text: string) {
     await sendMessage(text);
@@ -130,18 +137,23 @@ export function ChatInterface() {
             </div>
           </div>
           <div className="ml-auto flex items-center gap-2">
-            <Link href="/incidents">
-              <Button variant="ghost" size="sm" className="text-xs gap-1.5">
-                <AlertCircle className="size-3.5" />
-                Incidents
-              </Button>
-            </Link>
-            <Link href="/actions">
-              <Button variant="ghost" size="sm" className="text-xs gap-1.5">
-                <Zap className="size-3.5" />
-                Actions
-              </Button>
-            </Link>
+            {NAV_LINKS.map(({ href, label, icon: Icon }) => {
+              const isActive = pathname === href;
+              return (
+                <Link key={href} href={href}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={`text-xs gap-1.5 ${
+                      isActive ? "text-foreground font-semibold bg-muted" : ""
+                    }`}
+                  >
+                    <Icon className="size-3.5" />
+                    {label}
+                  </Button>
+                </Link>
+              );
+            })}
             <ThemeToggle />
           </div>
         </header>
@@ -159,7 +171,7 @@ export function ChatInterface() {
         {/* Input bar */}
         <div className="shrink-0 px-4 py-3 sm:px-6">
           <QueryInput onSend={handleSendMessage} isLoading={isLoading} />
-          <p className="mt-2 text-center text-[0.65rem] font-medium text-muted-foreground">
+          <p className="mt-2 text-left text-[0.65rem] font-medium text-muted-foreground">
             Shift+Enter for a new line · Enter to send
           </p>
         </div>

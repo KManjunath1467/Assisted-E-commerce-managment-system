@@ -1,5 +1,3 @@
-import { Loader2 } from "lucide-react";
-
 const NODE_LABELS: Record<string, string> = {
   router: "Routing query",
   orchestrator: "Planning analysis",
@@ -23,9 +21,19 @@ export function StreamingProgress({
     : "Thinking";
 
   return (
-    <div className="flex items-center gap-2 text-sm text-muted-foreground py-1">
-      <Loader2 className="size-3.5 animate-spin" />
-      <span>{label}…</span>
+    <div className="flex items-center gap-2 py-1 text-sm text-muted-foreground">
+      <span className="flex items-center gap-[3px]">
+        {[0, 160, 320].map((delay) => (
+          <span
+            key={delay}
+            className="size-1.5 rounded-full bg-primary animate-bounce"
+            style={{ animationDelay: `${delay}ms`, animationDuration: "1s" }}
+          />
+        ))}
+      </span>
+      <span key={label} className="animate-in fade-in slide-in-from-bottom-1 duration-300">
+        {label}…
+      </span>
     </div>
   );
 }
