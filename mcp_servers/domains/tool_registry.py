@@ -6,7 +6,6 @@ and what schema each tool returns.
 
 from __future__ import annotations
 
-from domains.common import Anomaly
 from domains.customer_support.schemas import CustomerSupportAnalysis
 from domains.inventory.schemas import InventoryAnalysis
 from domains.marketing.schemas import MarketingAnalysis
@@ -38,13 +37,15 @@ TOOL_DOMAIN_MAP: dict[str, str] = {
 }
 
 # Write (action-request) tools — used to detect and partition tool results.
-WRITE_ACTION_TOOLS: frozenset[str] = frozenset({
-    "restock",
-    "run_discount",
-    "pause_campaign",
-    "resume_campaign",
-    "create_support_ticket",
-})
+WRITE_ACTION_TOOLS: frozenset[str] = frozenset(
+    {
+        "restock",
+        "run_discount",
+        "pause_campaign",
+        "resume_campaign",
+        "create_support_ticket",
+    }
+)
 
 # All valid tool names.
 KNOWN_TOOLS: frozenset[str] = frozenset(TOOL_DOMAIN_MAP)
