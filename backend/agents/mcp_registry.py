@@ -141,26 +141,39 @@ class MCPClientRegistry:
         """
         if not self._client:
             raise RuntimeError("MCP registry is not connected.")
+
         tool = self._all_tools.get(name)
         if tool is None:
             raise KeyError(f"Tool '{name}' not found on MCP server.")
+
         result = await tool.ainvoke(args)
+
         # MCP tools return (content, artifact) tuple via response_format="content_and_artifact"
         if isinstance(result, tuple):
-            content, _ = result
-            if isinstance(content, list) and content:
-                text = content[0].get("text", "") if isinstance(content[0], dict) else str(content[0])
-                try:
-                    parsed = json.loads(text)
-                    if isinstance(parsed, dict):
-                        return parsed
-                except (json.JSONDecodeError, TypeError):
-                    pass
-                return {"message": text}
-            return {"message": str(content)}
+            return self._parse_mcp_tuple(result)
+
         if isinstance(result, dict):
             return result
         return {"message": str(result)}
+
+    @staticmethod
+    def _parse_mcp_tuple(result: tuple) -> dict:
+        content, _ = result
+
+        if isinstance(content, list) and content:
+            first = content[0]
+            text = first.get("text", "") if isinstance(first, dict) else str(first)
+
+            try:
+                parsed = json.loads(text)
+                if isinstance(parsed, dict):
+                    return parsed
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+            return {"message": text}
+
+        return {"message": str(content)}
 
     async def close(self) -> None:
         if self._client:
