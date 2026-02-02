@@ -45,35 +45,44 @@ def _normalize_mcp_result(tool_name: str, result: Any) -> Any:
     backend schema so domain builders see the same typed objects regardless of
     source.
     """
+    if not (isinstance(result, tuple) and len(result) == 2):
+        return result
     # MCP coroutine returns a tuple (content_blocks, structured_dict).
-    if isinstance(result, tuple) and len(result) == 2:
-        content_blocks, extra = result
-        # Prefer the structured_content dict (already parsed).
-        if isinstance(extra, dict) and "structured_content" in extra:
-            parsed = extra["structured_content"]
-        elif isinstance(content_blocks, list) and content_blocks:
-            first = content_blocks[0]
-            if isinstance(first, dict) and first.get("type") == "text":
-                try:
-                    parsed = json.loads(first["text"])
-                except (json.JSONDecodeError, TypeError):
-                    return result
-            else:
-                return result
-        else:
-            return result
+    content_blocks, extra = result
+    parsed = _extract_structured_content(content_blocks, extra)
 
-        schema = TOOL_OUTPUT_SCHEMA.get(tool_name)
-        if schema is not None:
-            return schema.model_validate(parsed)
-        # detect_revenue_anomalies → list[Anomaly]; MCP may wrap as {"result": [...]}.
-        if isinstance(parsed, dict) and "result" in parsed:
-            parsed = parsed["result"]
-        if isinstance(parsed, list):
-            return [Anomaly.model_validate(item) for item in parsed]
-        return parsed
+    if parsed is None:
+        return result
+    return _apply_schema(tool_name, parsed)
 
-    return result
+
+def _extract_structured_content(content_blocks, extra):
+    if isinstance(extra, dict) and "structured_content" in extra:
+        return extra["structured_content"]
+
+    if isinstance(content_blocks, list) and content_blocks:
+        first = content_blocks[0]
+        if isinstance(first, dict) and first.get("type") == "text":
+            try:
+                return json.loads(first["text"])
+            except (json.JSONDecodeError, TypeError):
+                return None
+
+    return None
+
+
+def _apply_schema(tool_name: str, parsed: Any):
+    schema = TOOL_OUTPUT_SCHEMA.get(tool_name)
+    if schema is not None:
+        return schema.model_validate(parsed)
+
+    if isinstance(parsed, dict) and "result" in parsed:
+        parsed = parsed["result"]
+
+    if isinstance(parsed, list):
+        return [Anomaly.model_validate(item) for item in parsed]
+
+    return parsed
 
 
 # ---------------------------------------------------------------------------
