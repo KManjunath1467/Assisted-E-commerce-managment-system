@@ -229,7 +229,7 @@ services:
       - langfuse-network
 
   clickhouse:
-    image: clickhouse/clickhouse-server:24.12
+    image: clickhouse/clickhouse-server:latest
     container_name: langfuse-clickhouse
     restart: always
     environment:

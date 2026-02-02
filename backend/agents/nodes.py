@@ -129,6 +129,7 @@ async def inventory_node(state: GraphState) -> dict:
         analysis_date=analysis_date,
         reorder_point=REORDER_POINT,
         requires_deep_analysis=str(state.get("requires_deep_analysis", True)).lower(),
+        action_requested=str(state.get("action_requested", False)).lower(),
     )
     data_results = {name: result for name, result in tool_results if name not in WRITE_ACTION_TOOLS}
     actions = _extract_actions(tool_results)
@@ -141,6 +142,7 @@ async def marketing_node(state: GraphState) -> dict:
     _, tool_results = await _get_agent("marketing").run(
         query=state["query"],
         requires_deep_analysis=str(state.get("requires_deep_analysis", True)).lower(),
+        action_requested=str(state.get("action_requested", False)).lower(),
     )
     data_results = {name: result for name, result in tool_results if name not in WRITE_ACTION_TOOLS}
     actions = _extract_actions(tool_results)

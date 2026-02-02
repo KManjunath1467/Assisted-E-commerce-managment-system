@@ -45,8 +45,10 @@ system_prompt: |
       - No critical contradictions remain
 
   - action_required = True if:
-      - The user explicitly requested an action, OR
-      - The analysis clearly implies a necessary operational action
+      - The user explicitly requested an action (e.g. "restock", "apply discount", "pause campaign")
+      - Set to False for informational queries — even if the data reveals problems,
+        the user should decide whether to take action. Do NOT proactively set this to True
+        just because the analysis found issues like low stock or poor ROAS.
 
   - If contradictions or weak evidence exist:
       - Reduce confidence

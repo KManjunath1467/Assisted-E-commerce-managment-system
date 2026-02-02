@@ -14,14 +14,11 @@ def route_after_aggregator(state: GraphState) -> str:
     """Conditional edge: decide what follows the aggregator node.
 
     - Simple factual queries (requires_deep_analysis=False, action_requested=False)
-      skip the reflector entirely and go straight to the final response —
-      unless domain agents queued actions that need HITL approval.
+      skip the reflector entirely and go straight to the final response.
     - Analytical queries and action-requested queries proceed to the reflector,
       which validates the analysis and guards the HITL path.
     """
     if state.get("requires_deep_analysis", True) or state.get("action_requested", False):
-        return "reflector"
-    if any(a.requires_approval for a in state.get("recommended_actions", [])):
         return "reflector"
     return "final_response"
 
@@ -50,6 +47,6 @@ def route_after_reflector(state: GraphState) -> str:
         and state.get("retry_count", 0) < MAX_RETRIES
     ):
         return "orchestrator"
-    if any(a.requires_approval for a in state.get("recommended_actions", [])):
+    if state.get("action_requested") and any(a.requires_approval for a in state.get("recommended_actions", [])):
         return "hitl"
     return "final_response"
