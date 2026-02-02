@@ -13,3 +13,6 @@ wheels/
 .venv
 .env
 CLAUDE.md
+
+# repowise API keys (local)
+.repowise/.env
