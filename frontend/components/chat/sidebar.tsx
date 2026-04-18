@@ -23,6 +23,42 @@ function relativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString();
 }
 
+function getDateGroup(iso: string): string {
+  const date = new Date(iso);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const weekAgo = new Date(today);
+  weekAgo.setDate(weekAgo.getDate() - 7);
+  const threadDay = new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+  );
+  if (threadDay >= today) return "Today";
+  if (threadDay >= yesterday) return "Yesterday";
+  if (threadDay >= weekAgo) return "This Week";
+  return "Older";
+}
+
+const GROUP_ORDER = ["Today", "Yesterday", "This Week", "Older"];
+
+function groupThreads(
+  threads: ThreadSummary[],
+): { group: string; threads: ThreadSummary[] }[] {
+  const map = new Map<string, ThreadSummary[]>();
+  for (const thread of threads) {
+    const g = getDateGroup(thread.updated_at);
+    if (!map.has(g)) map.set(g, []);
+    map.get(g)!.push(thread);
+  }
+  return GROUP_ORDER.filter((g) => map.has(g)).map((g) => ({
+    group: g,
+    threads: map.get(g)!,
+  }));
+}
+
 interface Props {
   threads: ThreadSummary[];
   isLoading: boolean;
@@ -42,6 +78,8 @@ export function Sidebar({
   onNewChat,
   onLoadThread,
 }: Props) {
+  const grouped = groupThreads(threads);
+
   return (
     <aside
       className={cn(
@@ -88,9 +126,14 @@ export function Sidebar({
       {isOpen && (
         <>
           <Separator />
-          <p className="px-3 py-2 text-[0.65rem] font-semibold uppercase tracking-widest text-muted-foreground">
-            Recent chats
-          </p>
+          <div className="px-3 pb-1 pt-2">
+            <p className="text-xs font-semibold text-foreground/80 truncate">
+              Operations Assistant
+            </p>
+            <p className="text-[0.6rem] font-semibold uppercase tracking-widest text-muted-foreground mt-0.5">
+              Recent chats
+            </p>
+          </div>
           <ScrollArea className="flex-1">
             {isLoading && threads.length === 0 ? (
               <div className="space-y-1 px-2">
@@ -106,25 +149,38 @@ export function Sidebar({
                 No conversations yet
               </p>
             ) : (
-              <div className="flex flex-col gap-0.5 px-2 pb-4">
-                {threads.map((thread) => (
-                  <button
-                    key={thread.thread_id}
-                    type="button"
-                    onClick={() => onLoadThread(thread.thread_id)}
-                    className={cn(
-                      "flex w-full cursor-pointer flex-col items-start rounded px-3 py-2 text-left transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                      activeThreadId === thread.thread_id &&
-                        "bg-muted font-semibold text-foreground",
-                    )}
-                  >
-                    <span className="w-full truncate text-xs font-medium">
-                      {thread.title}
-                    </span>
-                    <span className="mt-0.5 text-[0.65rem] font-medium text-muted-foreground">
-                      {relativeTime(thread.updated_at)}
-                    </span>
-                  </button>
+              <div className="flex flex-col pb-4">
+                {grouped.map(({ group, threads: groupThreads }) => (
+                  <div key={group}>
+                    <p className="px-3 pb-1 pt-3 text-[0.6rem] font-semibold uppercase tracking-widest text-muted-foreground">
+                      {group}
+                    </p>
+                    <div className="flex flex-col gap-0.5 px-2">
+                      {groupThreads.map((thread) => {
+                        const isActive = activeThreadId === thread.thread_id;
+                        return (
+                          <button
+                            key={thread.thread_id}
+                            type="button"
+                            onClick={() => onLoadThread(thread.thread_id)}
+                            className={cn(
+                              "flex w-full cursor-pointer flex-col items-start rounded py-2 text-left transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                              isActive
+                                ? "border-l-2 border-primary pl-[10px] pr-3 bg-primary/8 text-foreground"
+                                : "px-3",
+                            )}
+                          >
+                            <span className="w-full truncate text-xs font-medium">
+                              {thread.title}
+                            </span>
+                            <span className="mt-0.5 text-[0.65rem] font-medium text-muted-foreground">
+                              {relativeTime(thread.updated_at)}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 ))}
               </div>
             )}

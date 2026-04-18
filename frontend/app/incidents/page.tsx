@@ -7,7 +7,6 @@ import {
   ChevronDown,
   ChevronUp,
   Loader2,
-  RefreshCw,
 } from "lucide-react";
 import { getIncidents, resolveIncident } from "@/lib/api";
 import type { Incident } from "@/lib/types";
@@ -20,6 +19,7 @@ import {
   CardHeader,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { FilterTabs } from "@/components/filter-tabs";
 import { PageHeader } from "@/components/page-header";
@@ -70,7 +70,7 @@ function IncidentCard({
                 variant={isOpen ? "secondary" : "outline"}
                 className={
                   isOpen
-                    ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border-0"
+                    ? "bg-warning/10 text-warning border-0"
                     : "text-muted-foreground"
                 }
               >
@@ -168,7 +168,7 @@ function IncidentCard({
                         variant="outline"
                         disabled={resolving}
                         onClick={handleResolve}
-                        className="text-xs text-emerald-700 border-emerald-300 hover:bg-emerald-50 hover:border-emerald-400 dark:text-emerald-400 dark:border-emerald-800 dark:hover:bg-emerald-950"
+                        className="text-xs text-success border-success/30 hover:bg-success/10 hover:border-success/40"
                       >
                         {resolving ? (
                           <Loader2 className="mr-1.5 size-3 animate-spin" />
@@ -267,10 +267,11 @@ export default function IncidentsPage() {
       <main className="flex-1 overflow-y-auto px-6 py-6">
         <div className="mx-auto max-w-3xl space-y-4">
           {isLoading && incidents.length === 0 && (
-            <div className="flex items-center justify-center py-16 text-sm text-muted-foreground">
-              <RefreshCw className="mr-2 size-4 animate-spin" />
-              Loading incidents…
-            </div>
+            <>
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-24 w-full" />
+            </>
           )}
 
           {error && (
@@ -281,7 +282,7 @@ export default function IncidentsPage() {
 
           {!isLoading && !error && filteredIncidents.length === 0 && (
             <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-              <CheckCircle className="size-10 text-emerald-500" />
+              <CheckCircle className="size-10 text-success" />
               <p className="text-sm font-medium text-foreground">
                 {activeTab === "open"
                   ? "No open incidents"

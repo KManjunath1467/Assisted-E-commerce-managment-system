@@ -1,3 +1,5 @@
+"use client";
+
 import { Bot, Lightbulb, ShieldCheck } from "lucide-react";
 import {
   Accordion,

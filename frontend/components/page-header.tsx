@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { AlertCircle, MessageSquare, RefreshCw, Zap } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +44,8 @@ export function PageHeader({
   isLoading,
   onRefresh,
 }: Props) {
+  const pathname = usePathname();
+
   return (
     <header className="flex shrink-0 items-center gap-3 border-b border-border bg-background/90 px-6 py-3 backdrop-blur-sm shadow-sm">
       <Icon className="size-5 text-primary" />
@@ -53,14 +56,25 @@ export function PageHeader({
         </Badge>
       )}
       <div className="ml-auto flex items-center gap-2">
-        {NAV_LINKS[page].map(({ href, label, icon: NavIcon }) => (
-          <Link key={href} href={href}>
-            <Button variant="ghost" size="sm" className="text-xs gap-1.5">
-              <NavIcon className="size-3.5" />
-              {label}
-            </Button>
-          </Link>
-        ))}
+        {NAV_LINKS[page].map(({ href, label, icon: NavIcon }) => {
+          const isActive = pathname === href;
+          return (
+            <Link key={href} href={href}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`text-xs gap-1.5 ${
+                  isActive
+                    ? "text-foreground font-semibold bg-muted/60"
+                    : ""
+                }`}
+              >
+                <NavIcon className="size-3.5" />
+                {label}
+              </Button>
+            </Link>
+          );
+        })}
         <Button
           variant="ghost"
           size="sm"

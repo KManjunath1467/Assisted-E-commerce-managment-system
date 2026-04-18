@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 
 export default function GlobalError({
   error,
@@ -14,17 +16,20 @@ export default function GlobalError({
   }, [error]);
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-8">
-      <h2 className="text-xl font-semibold">Something went wrong</h2>
-      <p className="text-muted-foreground text-sm">
-        {error.message || "An unexpected error occurred."}
-      </p>
-      <button
-        onClick={reset}
-        className="bg-primary text-primary-foreground rounded-md px-4 py-2 text-sm hover:opacity-90"
-      >
-        Try again
-      </button>
+    <div className="flex min-h-screen items-center justify-center p-8">
+      <Card className="w-full max-w-sm">
+        <CardContent className="flex flex-col items-center gap-4 pt-6 text-center">
+          <h2 className="text-lg font-semibold text-foreground">
+            Something went wrong
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            {error.message || "An unexpected error occurred."}
+          </p>
+          <Button onClick={reset} size="sm">
+            Try again
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   );
 }
