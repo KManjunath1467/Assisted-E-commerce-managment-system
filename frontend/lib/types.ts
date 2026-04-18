@@ -327,8 +327,6 @@ export interface StreamingMessage {
   type: "streaming";
   /** The node currently executing (replaces previous, never stacks). */
   currentNode: string | null;
-  /** Accumulated streamed text from token events. */
-  streamedText: string;
   timestamp: string;
 }
 

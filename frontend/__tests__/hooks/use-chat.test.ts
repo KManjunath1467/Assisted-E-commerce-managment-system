@@ -47,8 +47,6 @@ describe("useChat — sendMessage", () => {
     mockPostQueryStream.mockImplementation(() =>
       makeStream([
         { event: "node_complete", data: { node: "sales_agent" } },
-        { event: "token", data: { content: "All " } },
-        { event: "token", data: { content: "good" } },
         { event: "complete", data: { status: "complete", thread_id: "t1", report } },
       ]),
     );
