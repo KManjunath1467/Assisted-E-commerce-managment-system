@@ -131,6 +131,10 @@ class MCPClientRegistry:
 
     async def close(self) -> None:
         if self._client:
+            try:
+                await self._client.close()
+            except Exception:
+                logger.warning("Error closing MCP client", exc_info=True)
             self._client = None
             self._tools.clear()
             logger.info("MCP client connection closed")
@@ -148,6 +152,10 @@ def get_mcp_registry() -> MCPClientRegistry | None:
 
 async def initialize_mcp_registry() -> MCPClientRegistry:
     global _registry
+    # Clear cached agents so they pick up fresh MCP tool references.
+    from agents.nodes import clear_agent_cache
+
+    clear_agent_cache()
     _registry = MCPClientRegistry()
     await _registry.initialize()
     return _registry

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from functools import cache
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.types import Command, Send, interrupt
@@ -26,9 +25,18 @@ from schemas.outputs import OperationsReport
 logger = logging.getLogger(__name__)
 
 
-@cache
+_agent_cache: dict[str, object] = {}
+
+
 def _get_agent(name: str):
-    return create_agent(name)
+    if name not in _agent_cache:
+        _agent_cache[name] = create_agent(name)
+    return _agent_cache[name]
+
+
+def clear_agent_cache() -> None:
+    """Clear the cached agent instances (call after MCP registry reinit)."""
+    _agent_cache.clear()
 
 
 def _format_findings_text(findings: list[DomainFinding]) -> str:
@@ -188,7 +196,7 @@ async def reflector_node(state: GraphState) -> dict:
                 action_required=False,
                 issues={"system": "Max retries reached"},
             ),
-            "retry_count": retry_count + 1,
+            "retry_count": retry_count,
         }
 
     root_cause = state.get("root_cause")

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bot, CheckCircle, Clock, XCircle } from "lucide-react";
+import { Bot, CheckCircle, Clock, Loader2, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -99,7 +99,7 @@ function ActionRow({
               className="h-7 font-medium text-emerald-700 border-emerald-300 hover:bg-emerald-50 hover:border-emerald-400 dark:text-emerald-400 dark:border-emerald-800 dark:hover:bg-emerald-950 disabled:opacity-50"
             >
               {pending === "approve" ? (
-                <Clock className="mr-1 size-3 animate-spin" />
+                <Loader2 className="mr-1 size-3 animate-spin" />
               ) : (
                 <CheckCircle className="mr-1 size-3" />
               )}
@@ -113,7 +113,7 @@ function ActionRow({
               className="h-7 font-medium text-destructive border-destructive/30 hover:bg-destructive/5 hover:border-destructive/50 disabled:opacity-50"
             >
               {pending === "reject" ? (
-                <Clock className="mr-1 size-3 animate-spin" />
+                <Loader2 className="mr-1 size-3 animate-spin" />
               ) : (
                 <XCircle className="mr-1 size-3" />
               )}
@@ -157,15 +157,24 @@ export function HitlActionCard({ message, onApprove }: Props) {
   useEffect(() => {
     if (message.is_historical || !pendingKey) return;
 
+    const controller = new AbortController();
+    let polling = false;
+
     const poll = async () => {
-      const ids = pendingKeyRef.current.split(",").filter(Boolean);
-      for (const actionId of ids) {
-        try {
-          const fetched = await getAction(actionId);
-          if (fetched.status !== "pending_approval") {
+      if (polling || controller.signal.aborted) return;
+      polling = true;
+      try {
+        const ids = pendingKeyRef.current.split(",").filter(Boolean);
+        const results = await Promise.all(
+          ids.map((id) =>
+            getAction(id, controller.signal).catch(() => null),
+          ),
+        );
+        for (const fetched of results) {
+          if (fetched && fetched.status !== "pending_approval") {
             setPolledResolved((prev) => ({
               ...prev,
-              [actionId]: {
+              [fetched.id]: {
                 action_type: fetched.action_type,
                 status: fetched.status,
                 message:
@@ -176,16 +185,18 @@ export function HitlActionCard({ message, onApprove }: Props) {
               },
             }));
           }
-        } catch {
-          // Ignore — polling is best-effort
         }
+      } finally {
+        polling = false;
       }
     };
 
     poll();
     const interval = setInterval(poll, 4000);
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      controller.abort();
+      clearInterval(interval);
+    };
   }, [pendingKey, message.is_historical]);
 
   return (

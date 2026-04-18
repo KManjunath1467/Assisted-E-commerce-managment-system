@@ -1,3 +1,4 @@
+import { EventSourceParserStream } from "eventsource-parser/stream";
 import type {
   ActionExecutionResult,
   ActionApprovalPayload,
@@ -12,10 +13,15 @@ import type {
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+async function apiFetch<T>(
+  path: string,
+  init?: RequestInit,
+  signal?: AbortSignal,
+): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     headers: { "Content-Type": "application/json", ...init?.headers },
     ...init,
+    signal: signal ?? init?.signal,
   });
 
   if (!res.ok) {
@@ -44,11 +50,13 @@ export type StreamEvent =
 /**
  * POST /api/v1/query/stream
  * Opens an SSE connection and yields parsed events as they arrive.
+ * Pass an AbortSignal to cancel the stream on unmount.
  */
 export async function* postQueryStream(
   query: string,
   threadId?: string | null,
   timeRange?: TimeRange | null,
+  signal?: AbortSignal,
 ): AsyncGenerator<StreamEvent> {
   const body: QueryRequest = {
     query,
@@ -60,6 +68,7 @@ export async function* postQueryStream(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    signal,
   });
 
   if (!res.ok) {
@@ -73,57 +82,31 @@ export async function* postQueryStream(
     throw new Error(`API ${res.status}: ${detail}`);
   }
 
-  const reader = res.body?.getReader();
-  if (!reader) throw new Error("No response body");
+  if (!res.body) throw new Error("No response body");
 
-  const decoder = new TextDecoder();
-  let buffer = "";
+  const eventStream = res.body
+    .pipeThrough(new TextDecoderStream())
+    .pipeThrough(new EventSourceParserStream());
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+  const reader = eventStream.getReader();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    // Keep the last (potentially incomplete) line in the buffer.
-    buffer = lines.pop() ?? "";
+      const eventType = value.event;
+      if (!eventType) continue;
 
-    let currentEvent = "";
-    for (const line of lines) {
-      if (line.startsWith("event: ")) {
-        currentEvent = line.slice(7).trim();
-      } else if (line.startsWith("data: ") && currentEvent) {
-        try {
-          const data = JSON.parse(line.slice(6));
-          yield { event: currentEvent, data } as StreamEvent;
-        } catch {
-          // skip malformed JSON
-        }
-        currentEvent = "";
+      try {
+        const data = JSON.parse(value.data);
+        yield { event: eventType, data } as StreamEvent;
+      } catch {
+        // skip malformed JSON
       }
     }
+  } finally {
+    reader.releaseLock();
   }
-}
-
-/**
- * POST /api/v1/query (non-streaming fallback)
- * Submits a user query to the multi-agent graph.
- * Prefer postQueryStream() for real-time progress updates.
- */
-export function postQuery(
-  query: string,
-  threadId?: string | null,
-  timeRange?: TimeRange | null,
-): Promise<QueryResponse> {
-  const body: QueryRequest = {
-    query,
-    thread_id: threadId ?? null,
-    time_range: timeRange ?? null,
-  };
-  return apiFetch<QueryResponse>("/api/v1/query", {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
 }
 
 /**
@@ -131,24 +114,27 @@ export function postQuery(
  * Returns a single action with its current status (any status, not just pending).
  * Used by the HITL card to poll for externally resolved actions.
  */
-export function getAction(actionId: string): Promise<PendingAction> {
-  return apiFetch<PendingAction>(`/api/v1/actions/${actionId}`);
+export function getAction(
+  actionId: string,
+  signal?: AbortSignal,
+): Promise<PendingAction> {
+  return apiFetch<PendingAction>(`/api/v1/actions/${actionId}`, undefined, signal);
 }
 
 /**
  * GET /api/v1/actions
  * Returns all actions regardless of status, most recent first.
  */
-export function getAllActions(): Promise<PendingAction[]> {
-  return apiFetch<PendingAction[]>("/api/v1/actions");
+export function getAllActions(signal?: AbortSignal): Promise<PendingAction[]> {
+  return apiFetch<PendingAction[]>("/api/v1/actions", undefined, signal);
 }
 
 /**
  * GET /api/v1/actions/pending
  * Returns all actions currently awaiting human approval.
  */
-export function getPendingActions(): Promise<PendingAction[]> {
-  return apiFetch<PendingAction[]>("/api/v1/actions/pending");
+export function getPendingActions(signal?: AbortSignal): Promise<PendingAction[]> {
+  return apiFetch<PendingAction[]>("/api/v1/actions/pending", undefined, signal);
 }
 
 /**
@@ -180,8 +166,8 @@ export function approveAction(
  * GET /api/v1/threads
  * Returns all threads ordered by most recently updated.
  */
-export function getThreads(): Promise<ThreadSummary[]> {
-  return apiFetch<ThreadSummary[]>("/api/v1/threads");
+export function getThreads(signal?: AbortSignal): Promise<ThreadSummary[]> {
+  return apiFetch<ThreadSummary[]>("/api/v1/threads", undefined, signal);
 }
 
 /**
@@ -190,11 +176,12 @@ export function getThreads(): Promise<ThreadSummary[]> {
  */
 export async function getThreadHistory(
   threadId: string,
+  signal?: AbortSignal,
 ): Promise<ThreadMessageItem[]> {
   const data = await apiFetch<{
     thread_id: string;
     messages: ThreadMessageItem[];
-  }>(`/api/v1/threads/${threadId}/history`);
+  }>(`/api/v1/threads/${threadId}/history`, undefined, signal);
   return data.messages;
 }
 
@@ -202,8 +189,8 @@ export async function getThreadHistory(
  * GET /api/v1/incidents
  * Returns all incidents ordered by most recent.
  */
-export function getIncidents(): Promise<Incident[]> {
-  return apiFetch<Incident[]>("/api/v1/incidents");
+export function getIncidents(signal?: AbortSignal): Promise<Incident[]> {
+  return apiFetch<Incident[]>("/api/v1/incidents", undefined, signal);
 }
 
 /**

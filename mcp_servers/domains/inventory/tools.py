@@ -1,15 +1,14 @@
 """Inventory domain MCP tools — business logic only, delegates SQL to repository."""
 
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
+
+from db import get_session_factory
+from domains.common import parse_date
 
 from .repository import InventoryRepository
 from .schemas import InventoryAnalysis, ProductRef, StockLevel
 
 REORDER_POINT = 30  # low-stock threshold (units)
-
-
-def _parse_date(d: str) -> date:
-    return date.fromisoformat(d)
 
 
 async def get_inventory_snapshot(as_of_date: str = "") -> dict:
@@ -18,12 +17,14 @@ async def get_inventory_snapshot(as_of_date: str = "") -> dict:
     Args:
         as_of_date: Optional ISO date (YYYY-MM-DD) for historical snapshot. Defaults to today when empty.
     """
-    target = _parse_date(as_of_date) if as_of_date else date.today()
-    repo = InventoryRepository()
+    target = parse_date(as_of_date) if as_of_date else datetime.now(UTC).date()
+    factory = get_session_factory()
+    async with factory() as session:
+        repo = InventoryRepository(session)
 
-    inv_rows = await repo.fetch_inventory()
-    prod_rows = await repo.fetch_products()
-    sale_rows = await repo.fetch_sales_by_date_range(target - timedelta(days=7), target)
+        inv_rows = await repo.fetch_inventory()
+        prod_rows = await repo.fetch_products()
+        sale_rows = await repo.fetch_sales_by_date_range(target - timedelta(days=7), target)
 
     prod_map = {p["product_id"]: p for p in prod_rows}
 
@@ -83,14 +84,16 @@ async def get_stockout_impact(date_str: str) -> dict:
     Args:
         date_str: Target date in YYYY-MM-DD format.
     """
-    target = _parse_date(date_str)
-    repo = InventoryRepository()
+    target = parse_date(date_str)
+    factory = get_session_factory()
+    async with factory() as session:
+        repo = InventoryRepository(session)
 
-    inv_rows = await repo.fetch_inventory()
-    prod_rows = await repo.fetch_products()
-    prior_sales = await repo.fetch_sales_by_date_range(
-        target - timedelta(days=7), target
-    )
+        inv_rows = await repo.fetch_inventory()
+        prod_rows = await repo.fetch_products()
+        prior_sales = await repo.fetch_sales_by_date_range(
+            target - timedelta(days=7), target
+        )
 
     prod_map = {p["product_id"]: p for p in prod_rows}
     name_map = {pid: p["name"] for pid, p in prod_map.items()}

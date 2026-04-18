@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import UTC, datetime
+from functools import partial
 
 from qdrant_client import AsyncQdrantClient, models
 from sentence_transformers import SentenceTransformer
@@ -35,6 +37,19 @@ def _get_client() -> AsyncQdrantClient:
     return _client
 
 
+def preload_model() -> None:
+    """Pre-load the embedding model at startup (call from server.py)."""
+    _get_model()
+    logger.info("SentenceTransformer model '%s' pre-loaded", EMBEDDING_MODEL)
+
+
+async def _encode_async(model: SentenceTransformer, text: str) -> list[float]:
+    """Run model.encode in a thread pool to avoid blocking the event loop."""
+    loop = asyncio.get_running_loop()
+    embedding = await loop.run_in_executor(None, partial(model.encode, text))
+    return embedding.tolist()
+
+
 async def search_past_incidents(query: str, limit: int = 3) -> PastIncidentSearchResult:
     """Search for past incidents similar to the given query.
 
@@ -44,7 +59,7 @@ async def search_past_incidents(query: str, limit: int = 3) -> PastIncidentSearc
     try:
         client = _get_client()
         model = _get_model()
-        embedding = model.encode(query).tolist()
+        embedding = await _encode_async(model, query)
 
         results = await client.query_points(
             collection_name=COLLECTION,
@@ -77,6 +92,6 @@ async def search_past_incidents(query: str, limit: int = 3) -> PastIncidentSearc
 
         return PastIncidentSearchResult(incidents=incidents)
 
-    except Exception as exc:
-        logger.warning("Qdrant search failed: %s", exc)
+    except (ConnectionError, TimeoutError, OSError) as exc:
+        logger.warning("Qdrant search failed (connectivity): %s", exc)
         return PastIncidentSearchResult(incidents=[])

@@ -21,16 +21,12 @@ import { Button } from "@/components/ui/button";
 import { useChat } from "@/hooks/use-chat";
 import { useThreads } from "@/hooks/use-threads";
 
-function newId(): string {
-  return crypto.randomUUID();
-}
-
 function rebuildMessages(items: ThreadMessageItem[]): ChatMessage[] {
   const messages: ChatMessage[] = [];
   for (const item of items) {
     if (item.role === "user") {
       const msg: UserMessage = {
-        id: newId(),
+        id: item.id,
         type: "user",
         text: (item.content.text as string) ?? "",
         timestamp: item.created_at,
@@ -40,7 +36,7 @@ function rebuildMessages(items: ThreadMessageItem[]): ChatMessage[] {
       const content = item.content as Record<string, unknown>;
       if (content.status === "complete" && content.report) {
         const msg: ReportMessage = {
-          id: newId(),
+          id: item.id,
           type: "report",
           report: content.report as ReportMessage["report"],
           thread_id: content.thread_id as string,
@@ -49,7 +45,7 @@ function rebuildMessages(items: ThreadMessageItem[]): ChatMessage[] {
         messages.push(msg);
       } else if (content.status === "pending_approval") {
         const msg: PendingApprovalMessage = {
-          id: newId(),
+          id: item.id,
           type: "pending_approval",
           actions:
             (content.pending_actions as PendingApprovalMessage["actions"]) ??
@@ -62,7 +58,7 @@ function rebuildMessages(items: ThreadMessageItem[]): ChatMessage[] {
         messages.push(msg);
       } else {
         const msg: ErrorMessage = {
-          id: newId(),
+          id: item.id,
           type: "error",
           text: "This message could not be replayed.",
           timestamp: item.created_at,

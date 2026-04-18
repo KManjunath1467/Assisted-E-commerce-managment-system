@@ -3,10 +3,12 @@
 Run:  cd mcp_servers && uv run pytest tests/test_customer_support.py -v
 """
 
+from datetime import date, timedelta
+
 from domains.customer_support.tools import get_customer_support_snapshot
 
-DIP_DAY = "2026-04-08"
-NORMAL_DAY = "2026-04-07"
+DIP_DAY = (date.today() - timedelta(days=1)).isoformat()
+NORMAL_DAY = (date.today() - timedelta(days=2)).isoformat()
 
 
 async def test_cx_dip_day_elevated_tickets():

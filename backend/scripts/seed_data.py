@@ -23,8 +23,8 @@ from core.enums import ActionStatus, ActionType, CampaignStatus, IncidentStatus
 from db.engine import get_engine
 from db.models import Action, CampaignModel, Incident, Inventory, Product, Sale, Ticket
 
-TODAY = date(2026, 4, 9)
-YESTERDAY = TODAY - timedelta(days=1)  # April 8 — the dip day
+TODAY = date.today()
+YESTERDAY = TODAY - timedelta(days=1)
 START_DATE = TODAY - timedelta(days=30)
 
 REGIONS = ["north", "south", "east", "west"]

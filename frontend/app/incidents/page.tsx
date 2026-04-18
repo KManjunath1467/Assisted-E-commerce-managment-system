@@ -1,16 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import {
   AlertCircle,
   CheckCircle,
   ChevronDown,
   ChevronUp,
-  Clock,
-  MessageSquare,
+  Loader2,
   RefreshCw,
-  Zap,
 } from "lucide-react";
 import { getIncidents, resolveIncident } from "@/lib/api";
 import type { Incident } from "@/lib/types";
@@ -24,7 +21,8 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { FilterTabs } from "@/components/filter-tabs";
+import { PageHeader } from "@/components/page-header";
 
 function IncidentCard({
   incident,
@@ -40,8 +38,11 @@ function IncidentCard({
 
   const isOpen = incident.status === "open";
 
+  const [resolveError, setResolveError] = useState<string | null>(null);
+
   async function handleResolve() {
     setResolving(true);
+    setResolveError(null);
     try {
       const updated = await resolveIncident(
         incident.id,
@@ -50,6 +51,10 @@ function IncidentCard({
       onUpdate(updated);
       setShowResolveForm(false);
       setResolutionSummary("");
+    } catch (err) {
+      setResolveError(
+        err instanceof Error ? err.message : "Failed to resolve incident.",
+      );
     } finally {
       setResolving(false);
     }
@@ -131,6 +136,11 @@ function IncidentCard({
                 <Separator />
               )}
               <CardFooter className="flex flex-col gap-3 pt-3">
+                {resolveError && (
+                  <div className="w-full rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+                    {resolveError}
+                  </div>
+                )}
                 {showResolveForm ? (
                   <>
                     <Textarea
@@ -161,7 +171,7 @@ function IncidentCard({
                         className="text-xs text-emerald-700 border-emerald-300 hover:bg-emerald-50 hover:border-emerald-400 dark:text-emerald-400 dark:border-emerald-800 dark:hover:bg-emerald-950"
                       >
                         {resolving ? (
-                          <Clock className="mr-1.5 size-3 animate-spin" />
+                          <Loader2 className="mr-1.5 size-3 animate-spin" />
                         ) : (
                           <CheckCircle className="mr-1.5 size-3" />
                         )}
@@ -238,74 +248,20 @@ export default function IncidentsPage() {
 
   return (
     <div className="flex h-screen flex-col bg-background">
-      {/* Header */}
-      <header className="flex shrink-0 items-center gap-3 border-b border-border bg-background/90 px-6 py-3 backdrop-blur-sm shadow-sm">
-        <AlertCircle className="size-5 text-primary" />
-        <span className="text-sm font-semibold text-foreground">Incidents</span>
-        {openCount > 0 && (
-          <Badge variant="secondary" className="text-[0.65rem]">
-            {openCount} open
-          </Badge>
-        )}
-        <div className="ml-auto flex items-center gap-2">
-          <Link href="/">
-            <Button variant="ghost" size="sm" className="text-xs gap-1.5">
-              <MessageSquare className="size-3.5" />
-              Chat
-            </Button>
-          </Link>
-          <Link href="/actions">
-            <Button variant="ghost" size="sm" className="text-xs gap-1.5">
-              <Zap className="size-3.5" />
-              Actions
-            </Button>
-          </Link>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={fetchIncidents}
-            disabled={isLoading}
-            className="text-xs gap-1.5"
-          >
-            <RefreshCw
-              className={`size-3.5 ${isLoading ? "animate-spin" : ""}`}
-            />
-            Refresh
-          </Button>
-          <ThemeToggle />
-        </div>
-      </header>
-
-      {/* Tabs */}
-      <div className="shrink-0 border-b border-border bg-background px-6">
-        <div className="mx-auto flex max-w-3xl gap-1">
-          {tabs.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-xs font-medium transition-colors focus-visible:outline-none ${
-                activeTab === tab.key
-                  ? "border-primary text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {tab.label}
-              <span
-                className={`rounded-full px-1.5 py-0.5 text-[0.6rem] font-semibold ${
-                  activeTab === tab.key
-                    ? tab.key === "open"
-                      ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
-                      : "bg-muted text-foreground"
-                    : "bg-muted text-muted-foreground"
-                }`}
-              >
-                {tab.count}
-              </span>
-            </button>
-          ))}
-        </div>
-      </div>
+      <PageHeader
+        page="incidents"
+        icon={AlertCircle}
+        title="Incidents"
+        badgeText={openCount > 0 ? `${openCount} open` : undefined}
+        isLoading={isLoading}
+        onRefresh={fetchIncidents}
+      />
+      <FilterTabs
+        tabs={tabs}
+        activeTab={activeTab}
+        warningKey="open"
+        onChange={setActiveTab}
+      />
 
       {/* Content */}
       <main className="flex-1 overflow-y-auto px-6 py-6">
