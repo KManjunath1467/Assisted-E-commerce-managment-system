@@ -3,7 +3,10 @@
 from datetime import UTC, date, datetime, timedelta
 
 from db import get_session_factory
+from sqlalchemy import update
+
 from domains.common import parse_date
+from domains.db_tables import inventory as _inventory
 
 from .repository import InventoryRepository
 from .schemas import InventoryAnalysis, ProductRef, StockLevel
@@ -24,7 +27,9 @@ async def get_inventory_snapshot(as_of_date: str = "") -> dict:
 
         inv_rows = await repo.fetch_inventory()
         prod_rows = await repo.fetch_products()
-        sale_rows = await repo.fetch_sales_by_date_range(target - timedelta(days=7), target)
+        sale_rows = await repo.fetch_sales_by_date_range(
+            target - timedelta(days=7), target
+        )
 
     prod_map = {p["product_id"]: p for p in prod_rows}
 
@@ -76,6 +81,58 @@ async def get_inventory_snapshot(as_of_date: str = "") -> dict:
         insights=insights,
     )
     return result.model_dump(mode="json")
+
+
+async def restock(targets: list[str], quantity: int, reason: str) -> dict:
+    """Request a restock action for human approval. Does NOT execute the restock.
+
+    Args:
+        targets: List of product_id strings or product names to restock.
+        quantity: Number of units to add per product (must be > 0).
+        reason: Brief explanation of why the restock is needed.
+    """
+    if not targets:
+        raise ValueError("targets must be a non-empty list of product IDs.")
+    if quantity <= 0:
+        raise ValueError("quantity must be greater than 0.")
+    from domains.common import resolve_product_ids, resolve_product_labels
+
+    targets = await resolve_product_ids(targets)
+    if not targets:
+        raise ValueError("None of the provided targets matched a known product.")
+    labels = await resolve_product_labels(targets)
+    return {
+        "action_type": "restock",
+        "targets": targets,
+        "parameters": {"quantity": quantity},
+        "description": f"Restock {labels} by {quantity} units each",
+        "reason": reason,
+    }
+
+
+async def execute_restock(targets: list[str], qty: int = 200) -> dict:
+    """Add qty units to each product's stock. targets is a list of product_id strings."""
+    if not targets:
+        return {"updated": 0, "message": "No targets specified."}
+    from domains.common import resolve_product_ids
+
+    targets = await resolve_product_ids(targets)
+    factory = get_session_factory()
+    async with factory() as session:
+        updated = 0
+        for product_id in targets:
+            result = await session.execute(
+                update(_inventory)
+                .where(_inventory.c.product_id == product_id)
+                .values(stock=_inventory.c.stock + qty)
+            )
+            if result.rowcount:
+                updated += result.rowcount
+        await session.commit()
+    return {
+        "updated": updated,
+        "message": f"Restocked {updated} product(s) by {qty} units each.",
+    }
 
 
 async def get_stockout_impact(date_str: str) -> dict:

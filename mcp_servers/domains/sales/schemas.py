@@ -41,3 +41,7 @@ class SalesAnalysis(BaseModel):
         default_factory=list,
         description="Revenue anomalies detected for the period",
     )
+    active_discounts: list[dict] | None = Field(
+        None,
+        description="Products with an active discount (populated by get_active_discounts)",
+    )

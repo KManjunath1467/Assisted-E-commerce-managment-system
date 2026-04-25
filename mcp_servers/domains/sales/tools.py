@@ -3,7 +3,10 @@
 from datetime import UTC, date, datetime, timedelta
 
 from db import get_session_factory
+from sqlalchemy import update
+
 from domains.common import Anomaly, ProductRef, Severity, TimeRange, parse_date
+from domains.db_tables import products as _products
 
 from .repository import SalesRepository
 from .schemas import (
@@ -213,3 +216,79 @@ async def detect_revenue_anomalies(current_date: str) -> list[dict]:
             )
 
     return [a.model_dump(mode="json") for a in anomalies]
+
+
+async def get_active_discounts() -> dict:
+    """Get all products that currently have an active discount applied.
+
+    Returns product_id, name, category, unit_price, and discount_pct for each
+    product where discount_active is True.
+    """
+    factory = get_session_factory()
+    async with factory() as session:
+        repo = SalesRepository(session)
+        products = await repo.fetch_products()
+    active = [
+        {
+            "product_id": p["product_id"],
+            "name": p["name"],
+            "category": p.get("category"),
+            "unit_price": float(p["unit_price"]),
+            "discount_pct": p["discount_pct"],
+        }
+        for p in products
+        if p.get("discount_active")
+    ]
+    return {"products_with_active_discounts": active, "total_count": len(active)}
+
+
+async def run_discount(targets: list[str], discount_pct: int, reason: str) -> dict:
+    """Request a discount action for human approval. Does NOT execute the discount.
+
+    Args:
+        targets: List of product_id strings or product names to apply the discount to.
+        discount_pct: Discount percentage (1-50).
+        reason: Brief explanation of why the discount is recommended.
+    """
+    if not targets:
+        raise ValueError("targets must be a non-empty list of product IDs.")
+    if not (0 < discount_pct <= 50):
+        raise ValueError("discount_pct must be between 1 and 50.")
+    from domains.common import resolve_product_ids, resolve_product_labels
+
+    targets = await resolve_product_ids(targets)
+    if not targets:
+        raise ValueError("None of the provided targets matched a known product.")
+    labels = await resolve_product_labels(targets)
+    return {
+        "action_type": "run_discount",
+        "targets": targets,
+        "parameters": {"discount_pct": discount_pct},
+        "description": f"Run {discount_pct}% discount on {labels}",
+        "reason": reason,
+    }
+
+
+async def execute_run_discount(targets: list[str], discount_pct: int = 15) -> dict:
+    """Activate a discount on specified products. Sets discount_pct and discount_active=True."""
+    if not targets:
+        return {"updated": 0, "message": "No targets specified."}
+    from domains.common import resolve_product_ids
+
+    targets = await resolve_product_ids(targets)
+    factory = get_session_factory()
+    async with factory() as session:
+        updated = 0
+        for product_id in targets:
+            result = await session.execute(
+                update(_products)
+                .where(_products.c.product_id == product_id)
+                .values(discount_pct=discount_pct, discount_active=True)
+            )
+            if result.rowcount:
+                updated += result.rowcount
+        await session.commit()
+    return {
+        "updated": updated,
+        "message": f"Discount of {discount_pct}% activated for {updated} product(s).",
+    }

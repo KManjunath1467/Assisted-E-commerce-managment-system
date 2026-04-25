@@ -9,14 +9,28 @@ import logging
 import sys
 from datetime import datetime, timezone
 
-from domains.customer_support.tools import get_customer_support_snapshot
-from domains.inventory.tools import get_inventory_snapshot, get_stockout_impact
-from domains.marketing.tools import get_campaign_status
+from domains.customer_support.tools import (
+    create_support_ticket,
+    execute_create_support_ticket,
+    get_customer_support_snapshot,
+    get_tickets,
+)
+from domains.inventory.tools import execute_restock, get_inventory_snapshot, get_stockout_impact, restock
+from domains.marketing.tools import (
+    execute_pause_campaign,
+    execute_resume_campaign,
+    get_campaign_status,
+    pause_campaign,
+    resume_campaign,
+)
 from domains.memory.tools import preload_model, search_past_incidents
 from domains.sales.tools import (
     compare_sales_periods,
     detect_revenue_anomalies,
+    execute_run_discount,
+    get_active_discounts,
     get_daily_sales_metrics,
+    run_discount,
 )
 from fastmcp import FastMCP
 from settings import get_settings
@@ -56,16 +70,28 @@ mcp = FastMCP("operations")
 mcp.tool()(get_daily_sales_metrics)
 mcp.tool()(compare_sales_periods)
 mcp.tool()(detect_revenue_anomalies)
+mcp.tool()(execute_run_discount)
+mcp.tool()(get_active_discounts)
+mcp.tool()(run_discount)
 
 # Inventory tools
 mcp.tool()(get_inventory_snapshot)
 mcp.tool()(get_stockout_impact)
+mcp.tool()(execute_restock)
+mcp.tool()(restock)
 
 # Marketing tools
 mcp.tool()(get_campaign_status)
+mcp.tool()(execute_pause_campaign)
+mcp.tool()(execute_resume_campaign)
+mcp.tool()(pause_campaign)
+mcp.tool()(resume_campaign)
 
 # Customer support tools
 mcp.tool()(get_customer_support_snapshot)
+mcp.tool()(get_tickets)
+mcp.tool()(execute_create_support_ticket)
+mcp.tool()(create_support_ticket)
 
 # Memory tools
 mcp.tool()(search_past_incidents)

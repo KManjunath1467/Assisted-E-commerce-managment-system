@@ -12,3 +12,4 @@ wheels/
 # Virtual environments
 .venv
 .env
+CLAUDE.md

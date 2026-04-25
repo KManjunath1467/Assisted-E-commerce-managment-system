@@ -33,6 +33,7 @@ async def index_incident(
     summary: str,
     actions_taken: list[ActionType],
     query: str = "",
+    created_at: datetime | None = None,
 ) -> None:
     """Upsert incident embedding into Qdrant."""
     store = _get_vector_store()
@@ -42,6 +43,6 @@ async def index_incident(
         "summary": summary,
         "query": query,
         "actions_taken": [a.value for a in actions_taken],
-        "created_at": datetime.now(UTC).isoformat(),
+        "created_at": (created_at or datetime.now(UTC)).isoformat(),
     }
     await store.aadd_texts([doc], metadatas=[metadata], ids=[incident_id])

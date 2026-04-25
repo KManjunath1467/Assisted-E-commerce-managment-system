@@ -25,16 +25,28 @@ def _merge_domain_findings(existing: list[DomainFinding], new: list[DomainFindin
     return list(by_domain.values())
 
 
+def _merge_actions(existing: list[RecommendedAction], new: list[RecommendedAction] | None) -> list[RecommendedAction]:
+    """Accumulate recommended actions from domain nodes.
+
+    Returning None resets the list (used by router_node at the start of each turn).
+    Returning [] is a no-op so domain nodes that found nothing don't wipe others.
+    """
+    if new is None:
+        return []
+    return existing + new
+
+
 class GraphState(TypedDict):
     query: str
     thread_id: str | None
     time_range: TimeRange | None
     incident_id: str | None
+    approved_action_id: str | None
     domains_to_run: list[AgentDomain]
     domain_findings: Annotated[list[DomainFinding], _merge_domain_findings]
     root_cause: RootCauseAnalysis | None
     reflection: ReflectionResult | None
-    recommended_actions: list[RecommendedAction]
+    recommended_actions: Annotated[list[RecommendedAction], _merge_actions]
     report: OperationsReport | None
     requires_hitl: bool
     action_requested: bool

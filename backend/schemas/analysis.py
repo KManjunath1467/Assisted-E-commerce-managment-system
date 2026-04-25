@@ -64,7 +64,7 @@ class RootCauseAnalysis(BaseModel):
         description="Evidence supporting the root cause conclusion",
     )
     confidence: float = Field(
-        ...,
+        default=0.5,
         ge=0.0,
         le=1.0,
         description="Confidence score for this root cause (0-1)",
