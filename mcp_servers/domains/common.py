@@ -101,7 +101,9 @@ async def resolve_product_labels(product_ids: list[str]) -> str:
 
     factory = get_session_factory()
     async with factory() as session:
-        rows = (await session.execute(select(products.c.product_id, products.c.name))).all()
+        rows = (
+            await session.execute(select(products.c.product_id, products.c.name))
+        ).all()
 
     id_to_name = {r.product_id: r.name for r in rows}
     labels = [f"{id_to_name.get(pid, pid)} ({pid})" for pid in product_ids]
