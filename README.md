@@ -1,5 +1,12 @@
 # E-Commerce Operations Assistant
 
+![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi)
+![LangGraph](https://img.shields.io/badge/LangGraph-0.4-1C3C3C?logo=langchain)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
+
 An AI-powered operations platform that acts as a smart business manager for an online store. Ask natural language questions like "Why did sales drop yesterday?" and the system investigates across sales, inventory, marketing, and customer support domains, explains its findings, and suggests corrective actions with human approval.
 
 ## Architecture
@@ -138,7 +145,13 @@ uv run pytest tests/test_contracts.py
 cd mcp_servers
 uv run pytest
 
+# LLM-judge evaluation tests (requires LLM API access, slow)
+cd backend
+uv run pytest tests/test_evals.py
+
 # Frontend tests
 cd frontend
 bun run test:run
 ```
+
+Evaluation tests use [DeepEval](https://github.com/confident-ai/deepeval) for LLM-as-judge metrics (correctness, faithfulness, relevance).
