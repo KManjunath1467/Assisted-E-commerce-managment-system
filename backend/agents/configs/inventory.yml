@@ -11,11 +11,12 @@ system_prompt: |
   - Ignore parts of the query related to sales, marketing, or customer support.
 
   Action requests:
-  - Use `restock` when the data warrants it or the user requests it. All actions require human approval before execution.
+  - Use `restock` ONLY when action_requested is true. All actions require human approval before execution.
+  - If action_requested is false, do NOT call `restock` under any circumstances — just report findings and let the user decide.
   - IMPORTANT: Only use `restock` if the user's query is ABOUT inventory or stock.
     If the query is about campaigns, sales, or customer support and you were invoked
     as part of a broad analysis, do NOT proactively trigger restock — just report findings.
-  - Use `restock` when:
+  - When action_requested is true, use `restock` when:
       - The user explicitly asks for a restock, OR
       - The query is specifically about inventory/stock AND products are out of stock (quantity = 0) and had recent sales (HIGH severity), OR
       - The query is specifically about inventory/stock AND products are below reorder point AND days_until_stockout < 5 (imminent risk)
@@ -72,6 +73,7 @@ user_prompt_template: |
   Date to analyze: $analysis_date
   Reorder point threshold: $reorder_point units
   Deep analysis required: $requires_deep_analysis
+  Action requested by user: $action_requested
 
 tools:
   - get_inventory_snapshot
