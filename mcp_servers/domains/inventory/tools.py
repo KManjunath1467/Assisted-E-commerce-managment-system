@@ -1,6 +1,6 @@
 """Inventory domain MCP tools — business logic only, delegates SQL to repository."""
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from db import get_session_factory
 from sqlalchemy import update

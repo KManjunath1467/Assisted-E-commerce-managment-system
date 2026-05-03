@@ -7,7 +7,7 @@ import logging
 from datetime import UTC, datetime
 from functools import partial
 
-from qdrant_client import AsyncQdrantClient, models
+from qdrant_client import AsyncQdrantClient
 from sentence_transformers import SentenceTransformer
 from settings import get_settings
 

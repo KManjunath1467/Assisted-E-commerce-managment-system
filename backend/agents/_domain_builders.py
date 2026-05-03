@@ -172,8 +172,6 @@ def _merge_sales_discounts(data, results):
 
 
 def _build_sales_fallback(results):
-    from domains.sales.schemas import SalesAnalysis, SalesMetrics
-
     now = datetime.now(UTC)
     return SalesAnalysis(
         kind="sales",
