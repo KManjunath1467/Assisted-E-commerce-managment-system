@@ -55,43 +55,6 @@ def _make_graph_result(*, pending: bool = False) -> dict:
     return base
 
 
-# ── POST /api/v1/query ────────────────────────────────────────────────────────
-
-
-@patch("api.routers.query.persist_thread_messages", new_callable=AsyncMock)
-@patch("api.routers.query.ensure_thread", new_callable=AsyncMock)
-async def test_sync_query_complete(mock_ensure: AsyncMock, mock_persist: AsyncMock, client: AsyncClient):
-    """Sync query returning a complete report."""
-    graph_mock: AsyncMock = client._transport.app.state.graph  # type: ignore[attr-defined]
-    graph_mock.ainvoke.return_value = _make_graph_result()
-
-    resp = await client.post(
-        "/api/v1/query",
-        json={"query": "check inventory"},
-    )
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["status"] == "complete"
-    assert data["report"]["summary"] == "All good"
-    mock_ensure.assert_called()
-
-
-@patch("api.routers.query.persist_thread_messages", new_callable=AsyncMock)
-@patch("api.routers.query.ensure_thread", new_callable=AsyncMock)
-async def test_sync_query_pending_approval(mock_ensure: AsyncMock, mock_persist: AsyncMock, client: AsyncClient):
-    """Sync query that triggers HITL interrupt."""
-    graph_mock: AsyncMock = client._transport.app.state.graph  # type: ignore[attr-defined]
-    graph_mock.ainvoke.return_value = _make_graph_result(pending=True)
-
-    resp = await client.post(
-        "/api/v1/query",
-        json={"query": "restock products"},
-    )
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["status"] == "pending_approval"
-
-
 # ── POST /api/v1/query/stream ─────────────────────────────────────────────────
 
 

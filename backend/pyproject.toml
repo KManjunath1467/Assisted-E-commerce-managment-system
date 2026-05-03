@@ -24,6 +24,7 @@ dependencies = [
     "langchain-mcp-adapters>=0.1",
     "tenacity>=9.0",
     "mcp-operations",
+    "complexipy>=5.4.0",
 ]
 
 [tool.uv.sources]
