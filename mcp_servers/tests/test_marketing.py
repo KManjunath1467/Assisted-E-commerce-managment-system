@@ -1,6 +1,6 @@
 """Tool-layer tests for marketing domain against a seeded database.
 
-Run:  cd mcp_servers && uv run pytest tests/test_marketing.py -v
+Run:  cd mcp_servers && uv run pytest tests/test_marketing.py -v 
 """
 
 from domains.marketing.tools import get_campaign_status
