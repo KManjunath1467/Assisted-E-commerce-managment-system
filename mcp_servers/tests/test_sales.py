@@ -6,7 +6,7 @@ Run:  cd mcp_servers && uv run pytest tests/test_sales.py -v
 from datetime import date, timedelta
 
 from domains.sales.tools import (
-    compare_sales_periods,
+    compare_sales_periods, 
     detect_revenue_anomalies,
     get_daily_sales_metrics,
 )
