@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 _engine = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
-
+ 
 
 def get_session_factory() -> async_sessionmaker[AsyncSession]:
     global _engine, _session_factory
