@@ -4,7 +4,7 @@ All external I/O (Qdrant, SentenceTransformer) is mocked so these run
 without a live vector store or model download.
 
 Run:  cd mcp_servers && uv run pytest tests/test_memory.py -v
-"""
+""" 
 
 from __future__ import annotations
 
