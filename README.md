@@ -9,7 +9,7 @@
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 ![uv](https://img.shields.io/badge/uv-Package%20Manager-DE5FE9?logo=uv)
 ![Bun](https://img.shields.io/badge/Bun-Runtime-f9f1e1?logo=bun)
-
+ 
 An AI-powered operations platform that acts as a smart business manager for an online store. Ask natural language questions like "Why did sales drop yesterday?" and the system investigates across sales, inventory, marketing, and customer support domains, explains its findings, and suggests corrective actions with human approval.
 
 ## Architecture
