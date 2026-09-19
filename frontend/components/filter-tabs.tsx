@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-
+ 
 interface Tab<T extends string> {
   key: T;
   label: string;
